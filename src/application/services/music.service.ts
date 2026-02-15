@@ -20,7 +20,11 @@ export class MusicService {
 
     await this.voiceGateway.join(guildId, channelId);
     player.enqueue(url);
-    await player.start();
+    
+    // Start playback without waiting for it to complete
+    player.start().catch(error => {
+      console.error('Error during playback:', error);
+    });
   }
 
   stop(guildId: string): void {
