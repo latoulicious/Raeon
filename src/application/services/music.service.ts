@@ -13,6 +13,10 @@ export class MusicService {
     private readonly encoder: AudioEncoder,
   ) {}
 
+  getExtractor(): AudioExtractor {
+    return this.extractor;
+  }
+
   async play(guildId: string, channelId: string, url: string): Promise<void> {
     let player = this.players.get(guildId);
     

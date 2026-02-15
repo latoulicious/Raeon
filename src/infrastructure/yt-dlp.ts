@@ -5,6 +5,13 @@ import { appLogger } from './logger.js';
 
 const logger = appLogger.getLogger('yt-dlp');
 
+export interface SearchResult {
+  title: string;
+  url: string;
+  duration: string;
+  uploader: string;
+}
+
 export class YtdlpExtractor implements AudioExtractor {
   constructor(private readonly cookiesPath: string) {}
 
@@ -57,5 +64,72 @@ export class YtdlpExtractor implements AudioExtractor {
     });
 
     return process.stdout;
+  }
+
+  async search(query: string, limit: number = 10): Promise<SearchResult[]> {
+    return new Promise((resolve, reject) => {
+      const args = [
+        '--cookies', this.cookiesPath,
+        '--format', 'bestaudio',
+        '--no-playlist',
+        '--quiet',
+        '--no-warnings',
+        '--no-cache-dir',
+        '--dump-single-json',
+        '--playlist-end', limit.toString(),
+        `ytsearch${limit}:${query}`,
+      ];
+
+      const process = spawn('yt-dlp', args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      logger.debug({ query, limit }, 'Started yt-dlp search');
+
+      let stdout = '';
+      let stderr = '';
+
+      process.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      process.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      process.on('error', (error) => {
+        logger.error({ error, query }, 'yt-dlp search process error');
+        appLogger.incrementYtdlpFailures();
+        reject(error);
+      });
+
+      process.on('close', (code) => {
+        if (code !== 0) {
+          logger.error({ code, stderr, query }, 'yt-dlp search failed');
+          appLogger.incrementYtdlpFailures();
+          reject(new Error(`yt-dlp search failed with code ${code}`));
+          return;
+        }
+
+        try {
+          const results = JSON.parse(stdout);
+          const searchResults: any[] = Array.isArray(results) ? results : [results];
+          
+          const formattedResults = searchResults.map((item: any) => ({
+            title: item.title || 'Unknown Title',
+            url: item.webpage_url || item.url || '',
+            duration: item.duration || 'Unknown',
+            uploader: item.uploader || item.channel || 'Unknown Uploader'
+          }));
+
+          logger.info({ query, resultCount: formattedResults.length }, 'Search completed successfully');
+          resolve(formattedResults);
+        } catch (error) {
+          logger.error({ error, stdout, query }, 'Failed to parse yt-dlp search results');
+          appLogger.incrementYtdlpFailures();
+          reject(new Error('Failed to parse search results'));
+        }
+      });
+    });
   }
 }
