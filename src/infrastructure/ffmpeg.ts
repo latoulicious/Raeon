@@ -5,6 +5,13 @@ import { appLogger } from './logger.js';
 
 const logger = appLogger.getLogger('ffmpeg');
 
+export class FfmpegEncoderError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = 'FfmpegEncoderError';
+  }
+}
+
 export class FfmpegEncoder implements AudioEncoder {
   encode(input: Readable, signal: AbortSignal): Readable {
     const args = [
@@ -23,19 +30,28 @@ export class FfmpegEncoder implements AudioEncoder {
     });
 
     if (signal.aborted) {
-      process.kill();
-      throw new Error('Aborted before encoding started');
+      process.kill('SIGTERM');
+      throw new FfmpegEncoderError('Aborted before encoding started');
     }
 
+    // Drain stderr to prevent blocking
+    let stderrOutput = '';
+    process.stderr?.on('data', (data) => {
+      stderrOutput += data.toString();
+    });
+
+    process.stderr?.on('end', () => {
+      if (stderrOutput && !signal.aborted) {
+        logger.error({ stderr: stderrOutput }, 'ffmpeg stderr output');
+      }
+    });
+
     signal.addEventListener('abort', () => {
-      process.kill();
+      logger.debug('Aborting ffmpeg process');
+      process.kill('SIGTERM');
     });
 
     input.pipe(process.stdin!);
-
-    process.stderr?.on('data', (data) => {
-      logger.error({ data: data.toString() }, 'ffmpeg stderr output');
-    });
 
     process.on('error', (error) => {
       if (!signal.aborted) {
@@ -44,8 +60,16 @@ export class FfmpegEncoder implements AudioEncoder {
       }
     });
 
+    process.on('close', (code) => {
+      if (code !== 0 && !signal.aborted) {
+        const errorMsg = `ffmpeg exited with code ${code}${stderrOutput ? `: ${stderrOutput.trim()}` : ''}`;
+        logger.error({ code, stderr: stderrOutput }, 'ffmpeg process failed');
+        appLogger.incrementFfmpegFailures();
+      }
+    });
+
     if (!process.stdout) {
-      throw new Error('Failed to create ffmpeg stdout stream');
+      throw new FfmpegEncoderError('Failed to create ffmpeg stdout stream');
     }
 
     return process.stdout;

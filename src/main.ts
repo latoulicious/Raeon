@@ -16,8 +16,10 @@ import { queueCommand } from './commands/queue.js';
 import { clearCommand } from './commands/clear.js';
 import { commandsCommand } from './commands/commands.js';
 import { searchCommand } from './commands/search.js';
+import { nowplayingCommand } from './commands/nowplaying.js';
 import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
+import { StartupValidationError } from './infrastructure/startup-validator.js';
 
 const logger = appLogger.getLogger('main');
 
@@ -48,6 +50,7 @@ class Application {
     this.slashCommands.set(clearCommand.data.name, clearCommand);
     this.slashCommands.set(commandsCommand.data.name, commandsCommand);
     this.slashCommands.set(searchCommand.data.name, searchCommand);
+    this.slashCommands.set(nowplayingCommand.data.name, nowplayingCommand);
   }
 
   async start(config: any): Promise<void> {
@@ -146,7 +149,14 @@ async function bootstrap(): Promise<void> {
     const app = new Application(config);
     await app.start(config);
   } catch (error) {
+    if (error instanceof StartupValidationError) {
+      console.error('\n' + error.message);
+      console.error('\nPlease fix the above issues and restart the bot.\n');
+      process.exit(1);
+    }
+    
     logger.error({ error }, 'Failed to start application');
+    console.error('\n❌ Failed to start application. Check logs for details.\n');
     process.exit(1);
   }
 }

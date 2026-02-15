@@ -50,6 +50,8 @@ async function execute(
     const embed = new EmbedBuilder()
       .setTitle(`🔍 Search Results for "${query}"`)
       .setColor('#FF0000')
+      .setThumbnail('https://cdn.discordapp.com/avatars/1234567890/1234567890abcdef.png')
+      .setDescription(`Found ${results.length} result${results.length === 1 ? '' : 's'} for your search`)
       .setTimestamp();
 
     results.forEach((result: any, index: number) => {
@@ -58,13 +60,13 @@ async function execute(
       
       embed.addFields({
         name: `${index + 1}. ${result.title}`,
-        value: `👤 ${result.uploader} | ⏱️ ${duration}\n🔗 [Click to play](${result.url})`,
+        value: `👤 **${result.uploader}** | ⏱️ **${duration}**\n🔗 [Click to play](${result.url})\n\`/play ${result.url}\``,
         inline: false
       });
     });
 
     embed.setFooter({ 
-      text: `Use /play with the URL to play a song • Results: ${results.length}/${limit}` 
+      text: `Use /play with the URL to play a song • Results: ${results.length}/${limit} • Made with ❤️` 
     });
 
     await interaction.followUp({ embeds: [embed] });

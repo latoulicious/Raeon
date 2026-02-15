@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
+import { MusicServiceError } from '../application/services/music.service.js';
 import { appLogger } from '../infrastructure/logger.js';
 
 const logger = appLogger.getLogger('command-play');
@@ -41,8 +42,13 @@ async function execute(
     await interaction.followUp(`🎵 Now playing: ${url}`);
   } catch (error) {
     logger.error({ guildId, url, error }, 'Error playing music');
-    const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
-    await interaction.followUp(errorMessage);
+    
+    if (error instanceof MusicServiceError) {
+      await interaction.followUp(error.userFriendlyMessage);
+    } else {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
+      await interaction.followUp(`❌ **Error**: ${errorMessage}`);
+    }
   }
 }
 

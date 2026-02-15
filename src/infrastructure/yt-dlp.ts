@@ -12,6 +12,13 @@ export interface SearchResult {
   uploader: string;
 }
 
+export class YtdlpExtractorError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = 'YtdlpExtractorError';
+  }
+}
+
 export class YtdlpExtractor implements AudioExtractor {
   constructor(private readonly cookiesPath: string) {}
 
@@ -36,27 +43,44 @@ export class YtdlpExtractor implements AudioExtractor {
     logger.debug({ url }, 'Started yt-dlp extraction');
 
     if (signal.aborted) {
-      process.kill();
-      throw new Error('Aborted before stream started');
+      process.kill('SIGTERM');
+      throw new YtdlpExtractorError('Aborted before stream started');
     }
 
-    signal.addEventListener('abort', () => {
-      process.kill();
+    // Drain stderr to prevent blocking
+    let stderrOutput = '';
+    process.stderr?.on('data', (data) => {
+      stderrOutput += data.toString();
     });
 
-    process.stderr?.on('data', (data) => {
-      logger.error({ data: data.toString() }, 'yt-dlp stderr output');
+    process.stderr?.on('end', () => {
+      if (stderrOutput && !signal.aborted) {
+        logger.error({ stderr: stderrOutput, url }, 'yt-dlp stderr output');
+      }
+    });
+
+    signal.addEventListener('abort', () => {
+      logger.debug({ url }, 'Aborting yt-dlp process');
+      process.kill('SIGTERM');
     });
 
     process.on('error', (error) => {
       if (!signal.aborted) {
-        logger.error({ error }, 'yt-dlp process error');
+        logger.error({ error, url }, 'yt-dlp process error');
+        appLogger.incrementYtdlpFailures();
+      }
+    });
+
+    process.on('close', (code) => {
+      if (code !== 0 && !signal.aborted) {
+        const errorMsg = `yt-dlp exited with code ${code}${stderrOutput ? `: ${stderrOutput.trim()}` : ''}`;
+        logger.error({ code, stderr: stderrOutput, url }, 'yt-dlp process failed');
         appLogger.incrementYtdlpFailures();
       }
     });
 
     if (!process.stdout) {
-      throw new Error('Failed to create yt-dlp stdout stream');
+      throw new YtdlpExtractorError('Failed to create yt-dlp stdout stream');
     }
 
     process.stdout.once('data', () => {
@@ -100,14 +124,15 @@ export class YtdlpExtractor implements AudioExtractor {
       process.on('error', (error) => {
         logger.error({ error, query }, 'yt-dlp search process error');
         appLogger.incrementYtdlpFailures();
-        reject(error);
+        reject(new YtdlpExtractorError('yt-dlp search process failed', error));
       });
 
       process.on('close', (code) => {
         if (code !== 0) {
+          const errorMsg = `yt-dlp search failed with code ${code}${stderr ? `: ${stderr}` : ''}`;
           logger.error({ code, stderr, query }, 'yt-dlp search failed');
           appLogger.incrementYtdlpFailures();
-          reject(new Error(`yt-dlp search failed with code ${code}`));
+          reject(new YtdlpExtractorError(errorMsg));
           return;
         }
 
@@ -127,7 +152,7 @@ export class YtdlpExtractor implements AudioExtractor {
         } catch (error) {
           logger.error({ error, stdout, query }, 'Failed to parse yt-dlp search results');
           appLogger.incrementYtdlpFailures();
-          reject(new Error('Failed to parse search results'));
+          reject(new YtdlpExtractorError('Failed to parse search results', error instanceof Error ? error : new Error(String(error))));
         }
       });
     });

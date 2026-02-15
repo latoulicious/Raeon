@@ -27,28 +27,70 @@ async function execute(
 
   const embed = new EmbedBuilder()
     .setTitle('🎵 Music Queue')
-    .setColor(0x00AE86);
+    .setColor('#1DB954')
+    .setThumbnail('https://cdn.discordapp.com/avatars/1234567890/1234567890abcdef.png')
+    .setTimestamp();
 
   if (isPlaying) {
-    embed.addFields({ name: 'Now Playing', value: '▶️ Currently streaming...' });
-  }
-
-  if (queue.length > 0) {
-    const queueList = queue.slice(0, 10).map((url, index) => 
-      `${index + 1}. ${url}`
-    ).join('\n');
-
+    const currentTrack = services.music.getCurrentTrack(guildId);
+    const videoId = currentTrack ? extractVideoId(currentTrack) : null;
+    const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
+    
     embed.addFields({ 
-      name: `Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})`, 
-      value: queueList || 'No songs in queue' 
+      name: '🎵 **Now Playing**', 
+      value: `▶️ **Currently Streaming**\n🔗 [Open in YouTube](${currentTrack || '#'})`,
+      inline: false 
     });
-
-    if (queue.length > 10) {
-      embed.setFooter({ text: `...and ${queue.length - 10} more songs` });
+    
+    if (thumbnailUrl) {
+      embed.setThumbnail(thumbnailUrl);
     }
   }
 
+  if (queue.length > 0) {
+    const queueList = queue.slice(0, 10).map((url, index) => {
+      const videoId = extractVideoId(url);
+      const shortUrl = videoId ? `https://youtu.be/${videoId}` : url;
+      return `${index + 1}. [Open](${shortUrl})`;
+    }).join('\n');
+
+    embed.addFields({ 
+      name: `📋 **Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})**`, 
+      value: queueList || 'No songs in queue',
+      inline: false 
+    });
+
+    if (queue.length > 10) {
+      embed.setFooter({ 
+        text: `...and ${queue.length - 10} more songs • Total: ${queue.length} songs` 
+      });
+    } else {
+      embed.setFooter({ 
+        text: `Total: ${queue.length} song${queue.length === 1 ? '' : 's'} in queue` 
+      });
+    }
+  } else {
+    embed.setDescription('📋 The queue is empty! Use `/play` to add songs.');
+    embed.setFooter({ text: 'Queue is empty' });
+  }
+
   await interaction.followUp({ embeds: [embed] });
+}
+
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /^([^&\n?#]+)$/
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
 }
 
 export const queueCommand: SlashCommand = {

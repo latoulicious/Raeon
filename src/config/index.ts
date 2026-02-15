@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { config } from 'dotenv';
+import { validateStartupRequirements } from '../infrastructure/startup-validator.js';
 
 config();
 
@@ -12,6 +13,9 @@ export interface Config {
 }
 
 export async function loadConfig(): Promise<Config> {
+  // Perform startup validation first
+  await validateStartupRequirements();
+
   const discordToken = process.env.DISCORD_TOKEN;
   const ytdlpCookiesPath = process.env.YTDLP_COOKIES_PATH;
 
