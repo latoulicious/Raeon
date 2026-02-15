@@ -13,10 +13,27 @@ export class VoiceGateway implements IVoiceGateway {
   private players = new Map<string, any>();
 
   async join(guildId: string, channelId: string): Promise<void> {
+    const client = (global as any).client;
+    const guild = client.guilds.cache.get(guildId);
+    
+    if (!guild) {
+      throw new Error(`Guild ${guildId} not found`);
+    }
+
+    // Ensure the guild has a voice adapter
+    if (!guild.voiceAdapterCreator) {
+      throw new Error('Voice adapter not available for this guild');
+    }
+
     const connection = joinVoiceChannel({
       channelId,
       guildId,
-      adapterCreator: (global as any).client.guilds.cache.get(guildId)?.voiceAdapterCreator,
+      adapterCreator: guild.voiceAdapterCreator,
+    });
+
+    // Add error handling for voice connection
+    connection.on('error', (error: any) => {
+      console.error('Voice connection error:', error);
     });
 
     const player = createAudioPlayer();

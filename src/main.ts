@@ -9,6 +9,12 @@ import { handleSlashCommand } from './handler/slash.js';
 import { handleMessage } from './handler/message.js';
 import { handleReaction } from './handler/reaction.js';
 import { pingCommand } from './commands/ping.js';
+import { playCommand } from './commands/play.js';
+import { stopCommand } from './commands/stop.js';
+import { skipCommand } from './commands/skip.js';
+import { queueCommand } from './commands/queue.js';
+import { clearCommand } from './commands/clear.js';
+import { commandsCommand } from './commands/commands.js';
 import { updatePresence } from './presence/index.js';
 import pino from 'pino';
 
@@ -34,6 +40,12 @@ class Application {
     this.musicService = new MusicService(voiceGateway, extractor, encoder);
 
     this.slashCommands.set(pingCommand.data.name, pingCommand);
+    this.slashCommands.set(playCommand.data.name, playCommand);
+    this.slashCommands.set(stopCommand.data.name, stopCommand);
+    this.slashCommands.set(skipCommand.data.name, skipCommand);
+    this.slashCommands.set(queueCommand.data.name, queueCommand);
+    this.slashCommands.set(clearCommand.data.name, clearCommand);
+    this.slashCommands.set(commandsCommand.data.name, commandsCommand);
   }
 
   async start(config: any): Promise<void> {
@@ -69,10 +81,23 @@ class Application {
 
   private async registerCommands(): Promise<void> {
     const commands = Array.from(this.slashCommands.values()).map(cmd => cmd.data.toJSON());
+    const commandNames = commands.map(cmd => cmd.name);
+    logger.info(`Registering commands: ${commandNames.join(', ')}`);
+    
     const application = this.discordClient.raw.application;
     if (application) {
-      await application.commands.set(commands);
-      logger.info(`Registered ${commands.length} slash commands`);
+      // Try guild-specific registration first (instant updates)
+      const guild = this.discordClient.raw.guilds.cache.first();
+      if (guild) {
+        // Clear existing commands to prevent duplication
+        await guild.commands.set([]);
+        await guild.commands.set(commands);
+        logger.info(`Registered ${commands.length} slash commands to guild: ${guild.name}`);
+      } else {
+        // Fallback to global registration
+        await application.commands.set(commands);
+        logger.info(`Registered ${commands.length} slash commands globally`);
+      }
     }
   }
 
