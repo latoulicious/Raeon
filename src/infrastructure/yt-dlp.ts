@@ -8,10 +8,13 @@ export class YtdlpExtractor implements AudioExtractor {
   stream(url: string, signal: AbortSignal): Readable {
     const args = [
       '--cookies', this.cookiesPath,
+      '-o', '-',
       '--format', 'bestaudio',
       '--no-playlist',
       '--quiet',
       '--no-warnings',
+      '--buffer-size', '16K',
+      '--no-part',
       url,
     ];
 

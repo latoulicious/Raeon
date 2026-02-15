@@ -4,6 +4,7 @@ import {
   createAudioResource, 
   AudioPlayerStatus,
   VoiceConnectionStatus,
+  entersState,
 } from '@discordjs/voice';
 import { Readable } from 'node:stream';
 import type { VoiceGateway as IVoiceGateway } from '../domain/audio.js';
@@ -20,44 +21,55 @@ export class VoiceGateway implements IVoiceGateway {
       throw new Error(`Guild ${guildId} not found`);
     }
 
-    // Ensure the guild has a voice adapter
     if (!guild.voiceAdapterCreator) {
       throw new Error('Voice adapter not available for this guild');
     }
 
-    const connection = joinVoiceChannel({
-      channelId,
-      guildId,
-      adapterCreator: guild.voiceAdapterCreator,
-    });
-
-    // Add error handling for voice connection
-    connection.on('error', (error: any) => {
-      console.error('Voice connection error:', error);
-    });
-
-    const player = createAudioPlayer();
-    connection.subscribe(player);
-
-    this.connections.set(guildId, connection);
-    this.players.set(guildId, player);
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Voice connection timeout'));
-      }, 15000);
-
-      connection.on(VoiceConnectionStatus.Ready, () => {
-        clearTimeout(timeout);
-        resolve();
+    let connection = this.connections.get(guildId);
+    
+    if (!connection || connection.state.status === VoiceConnectionStatus.Destroyed) {
+      connection = joinVoiceChannel({
+        channelId,
+        guildId,
+        adapterCreator: guild.voiceAdapterCreator,
+        selfDeaf: true,
       });
 
-      connection.on(VoiceConnectionStatus.Disconnected, () => {
-        clearTimeout(timeout);
-        this.connections.delete(guildId);
-        this.players.delete(guildId);
+      connection.on('error', (error: any) => {
+        console.error('Voice connection error:', error);
       });
-    });
+
+      connection.on(VoiceConnectionStatus.Disconnected, async () => {
+        try {
+          await Promise.race([
+            entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+            entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+          ]);
+        } catch (e) {
+          connection.destroy();
+          this.connections.delete(guildId);
+          this.players.delete(guildId);
+        }
+      });
+
+      this.connections.set(guildId, connection);
+    }
+
+    let player = this.players.get(guildId);
+    if (!player) {
+      player = createAudioPlayer();
+      connection.subscribe(player);
+      this.players.set(guildId, player);
+    }
+
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+    } catch (error) {
+      connection.destroy();
+      this.connections.delete(guildId);
+      this.players.delete(guildId);
+      throw new Error('Voice connection timeout');
+    }
   }
 
   async play(stream: Readable): Promise<void> {
