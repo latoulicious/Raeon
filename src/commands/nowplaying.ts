@@ -21,17 +21,18 @@ async function execute(
   }
 
   const isPlaying = services.music.isPlaying(guildId);
+  const isPaused = services.music.isPaused(guildId);
   const currentTrack = services.music.getCurrentTrack(guildId);
   const queue = services.music.getQueue(guildId);
 
-  if (!isPlaying || !currentTrack) {
+  if (!isPlaying && !isPaused) {
     const embed = new EmbedBuilder()
-      .setTitle('🎵 Now Playing')
-      .setDescription('❌ Nothing is currently playing')
+      .setTitle('Now Playing')
+      .setDescription('Nothing is currently playing')
       .setColor('#FF6B6B')
       .addFields({
         name: 'Queue Status',
-        value: queue.length > 0 ? `📋 ${queue.length} song${queue.length === 1 ? '' : 's'} in queue` : '📋 Queue is empty',
+        value: queue.length > 0 ? `${queue.length} song${queue.length === 1 ? '' : 's'} in queue` : 'Queue is empty',
         inline: false
       })
       .setFooter({ text: 'Use /play to start playing music' })
@@ -42,30 +43,30 @@ async function execute(
   }
 
   // Extract video ID from YouTube URL for thumbnail
-  const videoId = extractVideoId(currentTrack);
+  const videoId = currentTrack ? extractVideoId(currentTrack) : null;
   const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
 
   const embed = new EmbedBuilder()
-    .setTitle('🎵 Now Playing')
-    .setDescription(`▶️ **Currently Streaming**`)
-    .setColor('#1DB954')
+    .setTitle('Now Playing')
+    .setDescription(isPaused ? 'Currently Paused' : 'Currently Streaming')
+    .setColor(isPaused ? '#FFA500' : '#1DB954')
     .setURL(currentTrack)
     .addFields(
       {
-        name: '🔗 URL',
+        name: 'URL',
         value: `[Click to open](${currentTrack})`,
         inline: false
       },
       {
-        name: '📊 Queue Status',
+        name: 'Queue Status',
         value: queue.length > 0 
-          ? `📋 ${queue.length} song${queue.length === 1 ? '' : 's'} waiting` 
-          : '📋 Queue is empty',
+          ? `${queue.length} song${queue.length === 1 ? '' : 's'} waiting` 
+          : 'Queue is empty',
         inline: true
       },
       {
-        name: '⚙️ Status',
-        value: '🟢 Playing',
+        name: 'Status',
+        value: isPaused ? 'Paused' : 'Playing',
         inline: true
       }
     )

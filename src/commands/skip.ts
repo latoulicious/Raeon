@@ -27,7 +27,7 @@ async function execute(
 
   try {
     services.music.stop(guildId);
-    await interaction.followUp('⏭️ Skipped current song!');
+    await interaction.followUp('Skipped current song!');
   } catch (error) {
     logger.error({ guildId, error }, 'Error skipping music');
     await interaction.followUp('Failed to skip song.');

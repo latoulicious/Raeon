@@ -39,7 +39,7 @@ async function execute(
 
   try {
     await services.music.play(guildId, channelId, url);
-    await interaction.followUp(`🎵 Now playing: ${url}`);
+    await interaction.followUp(`Now playing: ${url}`);
   } catch (error) {
     logger.error({ guildId, url, error }, 'Error playing music');
     
@@ -47,7 +47,7 @@ async function execute(
       await interaction.followUp(error.userFriendlyMessage);
     } else {
       const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
-      await interaction.followUp(`❌ **Error**: ${errorMessage}`);
+      await interaction.followUp(`Error: ${errorMessage}`);
     }
   }
 }

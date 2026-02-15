@@ -28,7 +28,7 @@ async function execute(
 
   try {
     services.music.clear(guildId);
-    await interaction.followUp(`🗑️ Cleared ${queue.length} song${queue.length === 1 ? '' : 's'} from the queue.`);
+    await interaction.followUp(`Cleared ${queue.length} song${queue.length === 1 ? '' : 's'} from the queue.`);
   } catch (error) {
     logger.error({ guildId, error }, 'Error clearing queue');
     await interaction.followUp('Failed to clear the queue.');

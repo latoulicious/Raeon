@@ -90,6 +90,37 @@ export class MusicService {
     return player?.getIsPlaying() ?? false;
   }
 
+  isPaused(guildId: string): boolean {
+    const player = this.players.get(guildId);
+    return player?.getIsPaused() ?? false;
+  }
+
+  pause(guildId: string): void {
+    const player = this.players.get(guildId);
+    if (player) {
+      player.pause();
+    }
+  }
+
+  async resume(guildId: string): Promise<void> {
+    const player = this.players.get(guildId);
+    if (player) {
+      await player.resume();
+    }
+  }
+
+  shuffle(guildId: string): void {
+    const player = this.players.get(guildId);
+    if (player) {
+      player.shuffle();
+    }
+  }
+
+  remove(guildId: string, position: number): string | null {
+    const player = this.players.get(guildId);
+    return player?.remove(position) ?? null;
+  }
+
   getCurrentTrack(guildId: string): string | null {
     const player = this.players.get(guildId);
     return player?.getCurrentTrack() ?? null;

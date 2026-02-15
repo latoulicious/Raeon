@@ -19,26 +19,27 @@ async function execute(
 
   const queue = services.music.getQueue(guildId);
   const isPlaying = services.music.isPlaying(guildId);
+  const isPaused = services.music.isPaused(guildId);
 
-  if (queue.length === 0 && !isPlaying) {
+  if (queue.length === 0 && !isPlaying && !isPaused) {
     await interaction.followUp('The queue is empty!');
     return;
   }
 
   const embed = new EmbedBuilder()
-    .setTitle('🎵 Music Queue')
+    .setTitle('Music Queue')
     .setColor('#1DB954')
-    .setThumbnail('https://cdn.discordapp.com/avatars/1234567890/1234567890abcdef.png')
+    .setThumbnail(interaction.client.user.displayAvatarURL())
     .setTimestamp();
 
-  if (isPlaying) {
+  if (isPlaying || isPaused) {
     const currentTrack = services.music.getCurrentTrack(guildId);
     const videoId = currentTrack ? extractVideoId(currentTrack) : null;
     const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
     
     embed.addFields({ 
-      name: '🎵 **Now Playing**', 
-      value: `▶️ **Currently Streaming**\n🔗 [Open in YouTube](${currentTrack || '#'})`,
+      name: 'Now Playing', 
+      value: `${isPaused ? 'Currently Paused' : 'Currently Streaming'}\n[Open in YouTube](${currentTrack || '#'})`,
       inline: false 
     });
     
@@ -55,7 +56,7 @@ async function execute(
     }).join('\n');
 
     embed.addFields({ 
-      name: `📋 **Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})**`, 
+      name: `Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})`, 
       value: queueList || 'No songs in queue',
       inline: false 
     });
@@ -70,7 +71,7 @@ async function execute(
       });
     }
   } else {
-    embed.setDescription('📋 The queue is empty! Use `/play` to add songs.');
+    embed.setDescription('The queue is empty! Use /play to add songs.');
     embed.setFooter({ text: 'Queue is empty' });
   }
 

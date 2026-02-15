@@ -17,6 +17,10 @@ import { clearCommand } from './commands/clear.js';
 import { commandsCommand } from './commands/commands.js';
 import { searchCommand } from './commands/search.js';
 import { nowplayingCommand } from './commands/nowplaying.js';
+import { pauseCommand } from './commands/pause.js';
+import { resumeCommand } from './commands/resume.js';
+import { shuffleCommand } from './commands/shuffle.js';
+import { removeCommand } from './commands/remove.js';
 import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
 import { StartupValidationError } from './infrastructure/startup-validator.js';
@@ -51,6 +55,10 @@ class Application {
     this.slashCommands.set(commandsCommand.data.name, commandsCommand);
     this.slashCommands.set(searchCommand.data.name, searchCommand);
     this.slashCommands.set(nowplayingCommand.data.name, nowplayingCommand);
+    this.slashCommands.set(pauseCommand.data.name, pauseCommand);
+    this.slashCommands.set(resumeCommand.data.name, resumeCommand);
+    this.slashCommands.set(shuffleCommand.data.name, shuffleCommand);
+    this.slashCommands.set(removeCommand.data.name, removeCommand);
   }
 
   async start(config: any): Promise<void> {
