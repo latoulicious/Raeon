@@ -1,5 +1,8 @@
 import type { VoiceGateway, AudioExtractor, AudioEncoder } from '../../domain/audio.js';
 import { GuildPlayer } from '../../domain/guild-player.js';
+import { appLogger } from '../../infrastructure/logger.js';
+
+const logger = appLogger.getLogger('music-service');
 
 export class MusicService {
   private readonly players = new Map<string, GuildPlayer>();
@@ -16,6 +19,7 @@ export class MusicService {
     if (!player) {
       player = new GuildPlayer(guildId, this.voiceGateway, this.extractor, this.encoder);
       this.players.set(guildId, player);
+      logger.info({ guildId }, 'Created new guild player');
     }
 
     // Check queue limit (20 songs max)
@@ -28,10 +32,12 @@ export class MusicService {
 
     await this.voiceGateway.join(guildId, channelId);
     player.enqueue(url);
+    logger.debug({ guildId, url, queueSize: currentQueue.length + 1 }, 'Added track to queue');
     
     // Start playback without waiting for it to complete
     player.start().catch(error => {
-      console.error('Error during playback:', error);
+      logger.error({ guildId, error }, 'Error during playback');
+      appLogger.incrementStreamFailures();
     });
   }
 

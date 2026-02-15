@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import type { AudioExtractor } from '../domain/audio.js';
+import { appLogger } from './logger.js';
+
+const logger = appLogger.getLogger('yt-dlp');
 
 export class YtdlpExtractor implements AudioExtractor {
   constructor(private readonly cookiesPath: string) {}
@@ -23,7 +26,7 @@ export class YtdlpExtractor implements AudioExtractor {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    console.log(`[YtdlpExtractor] Started yt-dlp for URL: ${url}`);
+    logger.debug({ url }, 'Started yt-dlp extraction');
 
     if (signal.aborted) {
       process.kill();
@@ -35,12 +38,13 @@ export class YtdlpExtractor implements AudioExtractor {
     });
 
     process.stderr?.on('data', (data) => {
-      console.error(`yt-dlp error: ${data}`);
+      logger.error({ data: data.toString() }, 'yt-dlp stderr output');
     });
 
     process.on('error', (error) => {
       if (!signal.aborted) {
-        console.error('yt-dlp process error:', error);
+        logger.error({ error }, 'yt-dlp process error');
+        appLogger.incrementYtdlpFailures();
       }
     });
 
@@ -49,7 +53,7 @@ export class YtdlpExtractor implements AudioExtractor {
     }
 
     process.stdout.once('data', () => {
-      console.log(`[YtdlpExtractor] Received first chunk of data for: ${url}`);
+      logger.debug({ url }, 'Received first chunk of data');
     });
 
     return process.stdout;

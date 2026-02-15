@@ -1,6 +1,9 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { PingService } from '../application/services/ping.service.js';
 import type { MusicService } from '../application/services/music.service.js';
+import { appLogger } from '../infrastructure/logger.js';
+
+const logger = appLogger.getLogger('slash-handler');
 
 export interface SlashCommand {
   data: SlashCommandBuilder;
@@ -23,10 +26,13 @@ export async function handleSlashCommand(
     return;
   }
 
+  appLogger.incrementTotalCommands();
+  
   try {
+    logger.debug({ command: interaction.commandName, user: interaction.user.id }, 'Executing slash command');
     await command.execute(interaction, services);
   } catch (error) {
-    console.error(`Error executing slash command ${interaction.commandName}:`, error);
+    logger.error({ command: interaction.commandName, error }, 'Error executing slash command');
     const reply = interaction.replied || interaction.deferred
       ? { content: 'There was an error while executing this command!', ephemeral: true }
       : { content: 'There was an error while executing this command!', ephemeral: true };

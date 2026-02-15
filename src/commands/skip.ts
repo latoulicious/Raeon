@@ -1,5 +1,8 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
+import { appLogger } from '../infrastructure/logger.js';
+
+const logger = appLogger.getLogger('command-skip');
 
 const data = new SlashCommandBuilder()
   .setName('skip')
@@ -26,7 +29,7 @@ async function execute(
     services.music.stop(guildId);
     await interaction.followUp('⏭️ Skipped current song!');
   } catch (error) {
-    console.error('Error skipping music:', error);
+    logger.error({ guildId, error }, 'Error skipping music');
     await interaction.followUp('Failed to skip song.');
   }
 }

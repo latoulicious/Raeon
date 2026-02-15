@@ -1,5 +1,8 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
+import { appLogger } from '../infrastructure/logger.js';
+
+const logger = appLogger.getLogger('command-play');
 
 const data = new SlashCommandBuilder()
   .setName('play')
@@ -37,7 +40,7 @@ async function execute(
     await services.music.play(guildId, channelId, url);
     await interaction.followUp(`🎵 Now playing: ${url}`);
   } catch (error) {
-    console.error('Error playing music:', error);
+    logger.error({ guildId, url, error }, 'Error playing music');
     const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
     await interaction.followUp(errorMessage);
   }

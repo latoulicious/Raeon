@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import type { AudioEncoder } from '../domain/audio.js';
+import { appLogger } from './logger.js';
+
+const logger = appLogger.getLogger('ffmpeg');
 
 export class FfmpegEncoder implements AudioEncoder {
   encode(input: Readable, signal: AbortSignal): Readable {
@@ -31,12 +34,13 @@ export class FfmpegEncoder implements AudioEncoder {
     input.pipe(process.stdin!);
 
     process.stderr?.on('data', (data) => {
-      console.error(`ffmpeg error: ${data}`);
+      logger.error({ data: data.toString() }, 'ffmpeg stderr output');
     });
 
     process.on('error', (error) => {
       if (!signal.aborted) {
-        console.error('ffmpeg process error:', error);
+        logger.error({ error }, 'ffmpeg process error');
+        appLogger.incrementFfmpegFailures();
       }
     });
 

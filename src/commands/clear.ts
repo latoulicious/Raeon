@@ -1,5 +1,8 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
+import { appLogger } from '../infrastructure/logger.js';
+
+const logger = appLogger.getLogger('command-clear');
 
 const data = new SlashCommandBuilder()
   .setName('clear')
@@ -27,7 +30,7 @@ async function execute(
     services.music.clear(guildId);
     await interaction.followUp(`🗑️ Cleared ${queue.length} song${queue.length === 1 ? '' : 's'} from the queue.`);
   } catch (error) {
-    console.error('Error clearing queue:', error);
+    logger.error({ guildId, error }, 'Error clearing queue');
     await interaction.followUp('Failed to clear the queue.');
   }
 }

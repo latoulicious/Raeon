@@ -16,9 +16,9 @@ import { queueCommand } from './commands/queue.js';
 import { clearCommand } from './commands/clear.js';
 import { commandsCommand } from './commands/commands.js';
 import { updatePresence } from './presence/index.js';
-import pino from 'pino';
+import { appLogger } from './infrastructure/logger.js';
 
-const logger = pino();
+const logger = appLogger.getLogger('main');
 
 class Application {
   private readonly discordClient: DiscordClient;
@@ -82,6 +82,14 @@ class Application {
     await this.registerCommands();
 
     this.setupGracefulShutdown();
+    this.setupMetricsLogging();
+  }
+
+  private setupMetricsLogging(): void {
+    // Log metrics every 5 minutes
+    setInterval(() => {
+      appLogger.logMetrics();
+    }, 5 * 60 * 1000);
   }
 
   private async registerCommands(): Promise<void> {
@@ -132,8 +140,7 @@ async function bootstrap(): Promise<void> {
     const app = new Application(config);
     await app.start(config);
   } catch (error) {
-    logger.error('Failed to start application:', error);
-    console.error('Detailed error:', error);
+    logger.error({ error }, 'Failed to start application');
     process.exit(1);
   }
 }

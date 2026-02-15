@@ -8,6 +8,9 @@ import {
 } from '@discordjs/voice';
 import { Readable } from 'node:stream';
 import type { VoiceGateway as IVoiceGateway } from '../domain/audio.js';
+import { appLogger } from './logger.js';
+
+const logger = appLogger.getLogger('voice-gateway');
 
 export class VoiceGateway implements IVoiceGateway {
   private connections = new Map<string, any>();
@@ -36,11 +39,11 @@ export class VoiceGateway implements IVoiceGateway {
       });
 
       connection.on('stateChange', (oldState: any, newState: any) => {
-        console.log(`Voice connection state change: ${oldState.status} -> ${newState.status}`);
+        logger.debug({ guildId, oldStatus: oldState.status, newStatus: newState.status }, 'Voice connection state change');
       });
 
       connection.on('error', (error: any) => {
-        console.error('Voice connection error:', error);
+        logger.error({ guildId, error }, 'Voice connection error');
       });
 
       connection.on(VoiceConnectionStatus.Disconnected, async () => {
@@ -64,14 +67,15 @@ export class VoiceGateway implements IVoiceGateway {
       player = createAudioPlayer();
       connection.subscribe(player);
       this.players.set(guildId, player);
+      appLogger.incrementActivePlayers();
     }
 
     try {
-      console.log(`[VoiceGateway] Waiting for connection to be Ready for guild ${guildId}...`);
+      logger.debug({ guildId }, 'Waiting for voice connection to be Ready');
       await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-      console.log(`[VoiceGateway] Connection Ready for guild ${guildId}`);
+      logger.info({ guildId }, 'Voice connection Ready');
     } catch (error) {
-      console.error(`[VoiceGateway] Connection failed to reach Ready state for guild ${guildId}:`, error);
+      logger.error({ guildId, error }, 'Voice connection failed to reach Ready state');
       connection.destroy();
       this.connections.delete(guildId);
       this.players.delete(guildId);
@@ -116,6 +120,7 @@ export class VoiceGateway implements IVoiceGateway {
       connection.destroy();
       this.connections.delete(guildId);
       this.players.delete(guildId);
+      appLogger.decrementActivePlayers();
     }
   }
 

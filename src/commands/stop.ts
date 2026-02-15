@@ -1,5 +1,8 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
+import { appLogger } from '../infrastructure/logger.js';
+
+const logger = appLogger.getLogger('command-stop');
 
 const data = new SlashCommandBuilder()
   .setName('stop')
@@ -21,7 +24,7 @@ async function execute(
     await services.music.disconnect(guildId);
     await interaction.followUp('⏹️ Stopped playing music and disconnected from voice channel.');
   } catch (error) {
-    console.error('Error stopping music:', error);
+    logger.error({ guildId, error }, 'Error stopping music');
     await interaction.followUp('Failed to stop music.');
   }
 }
