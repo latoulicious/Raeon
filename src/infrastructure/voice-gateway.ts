@@ -35,6 +35,10 @@ export class VoiceGateway implements IVoiceGateway {
         selfDeaf: true,
       });
 
+      connection.on('stateChange', (oldState: any, newState: any) => {
+        console.log(`Voice connection state change: ${oldState.status} -> ${newState.status}`);
+      });
+
       connection.on('error', (error: any) => {
         console.error('Voice connection error:', error);
       });
@@ -63,8 +67,11 @@ export class VoiceGateway implements IVoiceGateway {
     }
 
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+      console.log(`[VoiceGateway] Waiting for connection to be Ready for guild ${guildId}...`);
+      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+      console.log(`[VoiceGateway] Connection Ready for guild ${guildId}`);
     } catch (error) {
+      console.error(`[VoiceGateway] Connection failed to reach Ready state for guild ${guildId}:`, error);
       connection.destroy();
       this.connections.delete(guildId);
       this.players.delete(guildId);

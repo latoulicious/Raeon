@@ -15,12 +15,15 @@ export class YtdlpExtractor implements AudioExtractor {
       '--no-warnings',
       '--buffer-size', '16K',
       '--no-part',
+      '--no-cache-dir',
       url,
     ];
 
     const process = spawn('yt-dlp', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+
+    console.log(`[YtdlpExtractor] Started yt-dlp for URL: ${url}`);
 
     if (signal.aborted) {
       process.kill();
@@ -44,6 +47,10 @@ export class YtdlpExtractor implements AudioExtractor {
     if (!process.stdout) {
       throw new Error('Failed to create yt-dlp stdout stream');
     }
+
+    process.stdout.once('data', () => {
+      console.log(`[YtdlpExtractor] Received first chunk of data for: ${url}`);
+    });
 
     return process.stdout;
   }

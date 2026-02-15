@@ -5,6 +5,7 @@ export class GuildPlayer {
   private queue: string[] = [];
   private currentAbortController: AbortController | null = null;
   private isPlaying = false;
+  private currentTrack: string | null = null;
 
   constructor(
     private readonly guildId: string,
@@ -28,10 +29,12 @@ export class GuildPlayer {
     try {
       while (this.queue.length > 0 && !this.currentAbortController.signal.aborted) {
         const url = this.queue.shift()!;
+        this.currentTrack = url;
         await this.playTrack(url, this.currentAbortController.signal);
       }
     } finally {
       this.isPlaying = false;
+      this.currentTrack = null;
       this.currentAbortController = null;
     }
   }
@@ -53,6 +56,10 @@ export class GuildPlayer {
 
   getIsPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  getCurrentTrack(): string | null {
+    return this.currentTrack;
   }
 
   private async playTrack(url: string, signal: AbortSignal): Promise<void> {

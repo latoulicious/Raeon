@@ -52,4 +52,18 @@ export class MusicService {
     const player = this.players.get(guildId);
     return player?.getIsPlaying() ?? false;
   }
+
+  getCurrentTrack(guildId: string): string | null {
+    const player = this.players.get(guildId);
+    return player?.getCurrentTrack() ?? null;
+  }
+
+  getAnyPlayingTrack(): string | null {
+    for (const player of this.players.values()) {
+      if (player.getIsPlaying()) {
+        return player.getCurrentTrack();
+      }
+    }
+    return null;
+  }
 }

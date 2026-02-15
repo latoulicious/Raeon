@@ -1,6 +1,6 @@
-# Raeon Discord Music Bot
+# Raeon
 
-A production-ready Discord music bot built with TypeScript and clean architecture principles.
+Discord music bot built with TypeScript and clean architecture principles.
 
 ## Features
 

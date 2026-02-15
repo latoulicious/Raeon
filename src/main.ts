@@ -53,7 +53,12 @@ class Application {
 
     this.discordClient.once('ready', () => {
       logger.info('Bot is ready');
-      updatePresence(this.discordClient.raw);
+      updatePresence(this.discordClient.raw, this.musicService);
+      
+      // Update presence every 30 seconds
+      setInterval(() => {
+        updatePresence(this.discordClient.raw, this.musicService);
+      }, 30000);
     });
 
     this.discordClient.on('interactionCreate', async (interaction) => {
