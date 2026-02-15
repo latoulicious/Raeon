@@ -13,7 +13,10 @@ export class StartupValidationError extends Error {
 
 async function checkCommandExists(command: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const process = spawn(command, ['--version'], {
+    // Use appropriate version flag for each command
+    const versionFlag = command === 'ffmpeg' ? '-version' : '--version';
+    
+    const process = spawn(command, [versionFlag], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
