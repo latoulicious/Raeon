@@ -38,7 +38,8 @@ async function execute(
     await interaction.followUp(`🎵 Now playing: ${url}`);
   } catch (error) {
     console.error('Error playing music:', error);
-    await interaction.followUp('Failed to play the song. Please check the URL and try again.');
+    const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
+    await interaction.followUp(errorMessage);
   }
 }
 

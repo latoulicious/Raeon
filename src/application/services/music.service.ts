@@ -18,6 +18,14 @@ export class MusicService {
       this.players.set(guildId, player);
     }
 
+    // Check queue limit (20 songs max)
+    const currentQueue = player.getQueue();
+    const maxQueueSize = 20;
+    
+    if (currentQueue.length >= maxQueueSize) {
+      throw new Error(`Queue is full! Maximum ${maxQueueSize} songs allowed. Use /clear to remove all songs or wait for some to finish.`);
+    }
+
     await this.voiceGateway.join(guildId, channelId);
     player.enqueue(url);
     
