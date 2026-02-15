@@ -1,4 +1,5 @@
 import pino, { Logger } from 'pino';
+import { DatabaseLogger, LogEntry } from './database-logger.js';
 
 export interface Metrics {
   total_commands: number;
@@ -12,6 +13,7 @@ export class AppLogger {
   private static instance: AppLogger;
   private logger: Logger;
   private metrics: Metrics;
+  private dbLogger: DatabaseLogger | null = null;
 
   private constructor() {
     const loggerOptions: any = {
@@ -47,11 +49,85 @@ export class AppLogger {
     return AppLogger.instance;
   }
 
+  async initializeDatabaseLogger(): Promise<void> {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      console.warn('DATABASE_URL not provided, database logging disabled');
+      return;
+    }
+
+    try {
+      this.dbLogger = new DatabaseLogger(databaseUrl);
+      await this.dbLogger.createLogsTable();
+      console.log('Database logger initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize database logger:', error);
+      this.dbLogger = null;
+    }
+  }
+
   getLogger(module?: string): Logger {
     if (module) {
-      return this.logger.child({ module });
+      const childLogger = this.logger.child({ module });
+      
+      // Override log methods to also save to database
+      const originalMethods = {
+        info: childLogger.info.bind(childLogger),
+        warn: childLogger.warn.bind(childLogger),
+        error: childLogger.error.bind(childLogger),
+        debug: childLogger.debug.bind(childLogger)
+      };
+
+      childLogger.info = (obj: any, msg?: string, ...args: any[]) => {
+        originalMethods.info(obj, msg, ...args);
+        this.logToDatabase('info', msg || '', module, obj);
+      };
+
+      childLogger.warn = (obj: any, msg?: string, ...args: any[]) => {
+        originalMethods.warn(obj, msg, ...args);
+        this.logToDatabase('warn', msg || '', module, obj);
+      };
+
+      childLogger.error = (obj: any, msg?: string, ...args: any[]) => {
+        originalMethods.error(obj, msg, ...args);
+        this.logToDatabase('error', msg || '', module, obj);
+      };
+
+      childLogger.debug = (obj: any, msg?: string, ...args: any[]) => {
+        originalMethods.debug(obj, msg, ...args);
+        this.logToDatabase('debug', msg || '', module, obj);
+      };
+
+      return childLogger;
     }
     return this.logger;
+  }
+
+  private logToDatabase(
+    level: string, 
+    message: string, 
+    module?: string, 
+    metadata?: any,
+    guildId?: string,
+    userId?: string,
+    commandName?: string
+  ): void {
+    if (this.dbLogger && this.dbLogger.isReady()) {
+      const logEntry: LogEntry = {
+        level,
+        message,
+        timestamp: new Date()
+      };
+
+      // Only add optional properties if they have values
+      if (module !== undefined) logEntry.module = module;
+      if (metadata !== undefined) logEntry.metadata = metadata;
+      if (guildId !== undefined) logEntry.guild_id = guildId;
+      if (userId !== undefined) logEntry.user_id = userId;
+      if (commandName !== undefined) logEntry.command_name = commandName;
+
+      this.dbLogger.logAsync(logEntry);
+    }
   }
 
   getMetrics(): Metrics {
@@ -90,6 +166,42 @@ export class AppLogger {
 
   logMetrics(): void {
     this.logger.info(this.metrics, 'Current metrics');
+  }
+
+  logWithContext(
+    level: 'info' | 'warn' | 'error' | 'debug',
+    message: string,
+    module: string,
+    context: {
+      guildId?: string;
+      userId?: string;
+      commandName?: string;
+      metadata?: any;
+    }
+  ): void {
+    this.logToDatabase(
+      level,
+      message,
+      module,
+      context.metadata,
+      context.guildId,
+      context.userId,
+      context.commandName
+    );
+
+    // Also log to console
+    this.logger[level]({
+      ...context.metadata,
+      guild_id: context.guildId,
+      user_id: context.userId,
+      command_name: context.commandName
+    }, message);
+  }
+
+  async cleanup(): Promise<void> {
+    if (this.dbLogger) {
+      await this.dbLogger.close();
+    }
   }
 }
 

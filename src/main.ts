@@ -123,6 +123,7 @@ class Application {
       
       try {
         await this.discordClient.destroy();
+        await appLogger.cleanup();
         logger.info('Bot shut down successfully');
         process.exit(0);
       } catch (error) {
@@ -138,6 +139,9 @@ class Application {
 
 async function bootstrap(): Promise<void> {
   try {
+    // Initialize database logger first
+    await appLogger.initializeDatabaseLogger();
+    
     const config = await loadConfig();
     const app = new Application(config);
     await app.start(config);
