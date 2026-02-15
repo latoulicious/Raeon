@@ -10,14 +10,20 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist"
   },
-  "keywords": ["discord", "music", "bot", "typescript"],
+  "keywords": [
+    "discord",
+    "music",
+    "bot",
+    "typescript"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.14.1",
     "@discordjs/voice": "^0.16.1",
-    "pino": "^8.17.2",
-    "libsodium-wrappers": "^0.7.13"
+    "discord.js": "^14.14.1",
+    "dotenv": "^17.3.1",
+    "libsodium-wrappers": "^0.7.13",
+    "pino": "^8.17.2"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",

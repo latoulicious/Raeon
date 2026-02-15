@@ -103,6 +103,7 @@ async function bootstrap(): Promise<void> {
     await app.start(config);
   } catch (error) {
     logger.error('Failed to start application:', error);
+    console.error('Detailed error:', error);
     process.exit(1);
   }
 }

@@ -1,5 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { config } from 'dotenv';
+
+config();
 
 const require = createRequire(import.meta.url);
 
