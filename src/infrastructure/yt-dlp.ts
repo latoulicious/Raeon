@@ -142,9 +142,11 @@ export class YtdlpExtractor implements AudioExtractor {
           
           const formattedResults = searchResults.map((item: any) => ({
             title: item.title || 'Unknown Title',
-            url: item.webpage_url || item.url || '',
+            url: item.webpage_url && !item.webpage_url.startsWith('ytsearch') ? item.webpage_url : 
+                 item.url && !item.url.startsWith('ytsearch') ? item.url :
+                 item.id ? `https://www.youtube.com/watch?v=${item.id}` : '',
             duration: item.duration || 'Unknown',
-            uploader: item.uploader || item.channel || 'Unknown Uploader'
+            uploader: item.uploader || item.channel || item.uploader_name || 'Unknown Uploader'
           }));
 
           logger.info({ query, resultCount: formattedResults.length }, 'Search completed successfully');

@@ -66,7 +66,7 @@ async function execute(
     });
 
     embed.setFooter({ 
-      text: `Use /play with the URL to play a song • Results: ${results.length}/${limit}` 
+      text: `Use /play with the URL or try /play ytsearch1:"song name" for direct search • Results: ${results.length}/${limit}` 
     });
 
     await interaction.followUp({ embeds: [embed] });

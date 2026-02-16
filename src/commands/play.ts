@@ -10,7 +10,7 @@ const data = new SlashCommandBuilder()
   .setDescription('Play a song from YouTube')
   .addStringOption(option =>
     option.setName('url')
-      .setDescription('YouTube URL to play')
+      .setDescription('YouTube URL or search query (e.g., ytsearch10:song name)')
       .setRequired(true),
   ) as SlashCommandBuilder;
 
@@ -38,8 +38,38 @@ async function execute(
   const channelId = voiceChannel.id;
 
   try {
-    await services.music.play(guildId, channelId, url);
-    await interaction.followUp(`Now playing: ${url}`);
+    // Handle search queries (ytsearch format)
+    let finalUrl = url;
+    if (url.startsWith('ytsearch')) {
+      // This is a search query, get the first result
+      const extractor = services.music.getExtractor();
+      if (!extractor || typeof (extractor as any).search !== 'function') {
+        await interaction.followUp('Search functionality is not available.');
+        return;
+      }
+
+      // Extract search query from ytsearch format
+      const searchMatch = url.match(/ytsearch(\d+):(.+)/);
+      if (!searchMatch) {
+        await interaction.followUp('Invalid search format. Use: ytsearch10:your query');
+        return;
+      }
+
+      const [, limit, query] = searchMatch;
+      const results = await (extractor as any).search(query, parseInt(limit || '10'));
+      
+      if (results.length === 0) {
+        await interaction.followUp('No results found for your search query.');
+        return;
+      }
+
+      // Use the first search result
+      finalUrl = results[0].url;
+      logger.debug({ originalQuery: url, finalUrl, resultCount: results.length }, 'Resolved search query to URL');
+    }
+
+    await services.music.play(guildId, channelId, finalUrl);
+    await interaction.followUp(`Now playing: ${finalUrl}`);
   } catch (error) {
     logger.error({ guildId, url, error }, 'Error playing music');
     
