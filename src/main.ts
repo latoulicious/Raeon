@@ -153,11 +153,20 @@ class Application {
   }
 
   private setupGracefulShutdown(): void {
-    const shutdown = async (signal: string) => {
-      logger.info(`Received ${signal}, shutting down gracefully`);
+    let shuttingDown = false;
+
+    const shutdown = async (signal: string, error?: Error) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+
+      if (error) {
+        logger.error({ error, signal }, 'Bot encountered a critical error, shutting down');
+      } else {
+        logger.info({ signal }, 'Received signal, shutting down gracefully');
+      }
+
       this.abortController.abort();
 
-      // Set a force-exit timeout if cleanup takes too long (10 seconds)
       const forceExit = setTimeout(() => {
         logger.error('Graceful shutdown timed out, force exiting...');
         process.exit(1);
@@ -165,30 +174,45 @@ class Application {
       forceExit.unref();
       
       try {
-        // 1. Clear intervals
-        if (this.presenceInterval) clearInterval(this.presenceInterval);
-        if (this.metricsInterval) clearInterval(this.metricsInterval);
+        if (this.presenceInterval) {
+          clearInterval(this.presenceInterval);
+          logger.debug('Presence interval cleared');
+        }
+        if (this.metricsInterval) {
+          clearInterval(this.metricsInterval);
+          logger.debug('Metrics interval cleared');
+        }
 
-        // 2. Cleanup Music Service (disconnect all players)
         await this.musicService.cleanup();
+        logger.debug('Music service cleaned up');
 
-        // 3. Destroy Discord client
         await this.discordClient.raw.destroy();
+        logger.debug('Discord client destroyed');
         
-        // 4. Cleanup Logger
         await appLogger.cleanup();
+        // Console log here because the logger is now closed
+        console.log('Database logger connection closed');
         
         clearTimeout(forceExit);
         logger.info('Bot shut down successfully');
-        process.exit(0);
-      } catch (error) {
-        logger.error('Error during shutdown:', error);
+        process.exit(error ? 1 : 0);
+      } catch (err) {
+        console.error('Error during shutdown:', err);
         process.exit(1);
       }
     };
 
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
+    
+    process.on('unhandledRejection', (reason) => {
+      const error = reason instanceof Error ? reason : new Error(String(reason));
+      shutdown('unhandledRejection', error);
+    });
+
+    process.on('uncaughtException', (error) => {
+      shutdown('uncaughtException', error);
+    });
   }
 }
 

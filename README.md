@@ -1,20 +1,10 @@
 # Raeon
 
-Discord music bot built with TypeScript and clean architecture principles.
-
-## Features
-
-- Clean Architecture with dependency injection
-- Streaming audio pipeline (yt-dlp → ffmpeg → Discord)
-- YouTube cookies support for bypassing restrictions
-- Graceful shutdown handling
-- Structured logging with Pino
-- Per-guild queue management
-- No buffering or temp files
+<img src="./assets/banner.png" alt="Raeon">
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 21+
 - yt-dlp installed system-wide
 - ffmpeg installed system-wide
 
@@ -46,26 +36,3 @@ Discord music bot built with TypeScript and clean architecture principles.
    npm start
    ```
 
-## Development
-
-- `npm run dev` - Watch mode for development
-- `npm run build` - Compile TypeScript
-- `npm run clean` - Clean build directory
-
-## Architecture
-
-```
-src/
-├── main.ts                    # Application entry point
-├── config/                    # Environment configuration
-├── domain/                    # Core business logic
-├── infrastructure/            # External integrations
-├── application/services/      # Service layer
-├── handler/                   # Event handlers
-├── commands/                  # Slash commands
-└── presence/                  # Discord presence management
-```
-
-## License
-
-MIT
