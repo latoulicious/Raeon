@@ -21,6 +21,7 @@ import { pauseCommand } from './commands/pause.js';
 import { resumeCommand } from './commands/resume.js';
 import { shuffleCommand } from './commands/shuffle.js';
 import { removeCommand } from './commands/remove.js';
+import { pruneCommand } from './commands/prune.js';
 import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
 import { StartupValidationError } from './infrastructure/startup-validator.js';
@@ -75,6 +76,7 @@ class Application {
     this.slashCommands.set(resumeCommand.data.name, resumeCommand);
     this.slashCommands.set(shuffleCommand.data.name, shuffleCommand);
     this.slashCommands.set(removeCommand.data.name, removeCommand);
+    this.slashCommands.set(pruneCommand.data.name, pruneCommand);
   }
 
   async start(config: any): Promise<void> {

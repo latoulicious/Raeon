@@ -316,6 +316,11 @@ export class EmbedService {
       .setFooter({ text: 'Use /play to start music again' });
   }
 
+  static createPruneEmbed(count: number, user: User): EmbedBuilder {
+    return this.createSuccessEmbed('Prune', `Successfully deleted ${count} bot messages.`, user)
+      .setColor(this.COLORS.INFO);
+  }
+
   static createHelpEmbed(client: Client): EmbedBuilder {
     const embed = this.createBaseEmbed('Raeon', this.COLORS.PRIMARY)
       .setURL('https://github.com/latoulicious/Raeon')
@@ -346,7 +351,8 @@ export class EmbedService {
         name: 'Utility Commands', 
         value: 
           '`/ping` - Check bot latency\n' +
-          '`/commands` - Show this help message',
+          '`/commands` - Show this help message\n' +
+          '`/prune [amount]` - Delete bot messages',
         inline: false 
       },
       {
