@@ -1,5 +1,6 @@
 import { loadConfig } from './config/index.js';
 import { DiscordClient } from './infrastructure/discord-client.js';
+import { CommandManager } from './infrastructure/command-manager.js';
 import { YtdlpExtractor } from './infrastructure/yt-dlp.js';
 import { FfmpegEncoder } from './infrastructure/ffmpeg.js';
 import { VoiceGateway } from './infrastructure/voice-gateway.js';
@@ -33,14 +34,18 @@ class Application {
   private readonly discordClient: DiscordClient;
   private readonly pingService: PingService;
   private readonly musicService: MusicService;
+  private readonly commandManager: CommandManager;
   private readonly slashCommands = new Map<string, any>();
   private abortController: AbortController;
+  private presenceInterval: NodeJS.Timeout | null = null;
+  private metricsInterval: NodeJS.Timeout | null = null;
 
   constructor(config: any) {
     this.abortController = new AbortController();
 
     this.discordClient = new DiscordClient();
-    
+    this.commandManager = new CommandManager(this.discordClient.raw);
+
     const extractor = new YtdlpExtractor(config.ytdlpCookiesPath);
     const encoder = new FfmpegEncoder();
     const voiceGateway = new VoiceGateway();
@@ -87,7 +92,7 @@ class Application {
       updatePresence(this.discordClient.raw, this.musicService);
       
       // Update presence every 30 seconds
-      setInterval(() => {
+      this.presenceInterval = setInterval(() => {
         updatePresence(this.discordClient.raw, this.musicService);
       }, 30000);
     });
@@ -118,30 +123,32 @@ class Application {
 
   private setupMetricsLogging(): void {
     // Log metrics every 5 minutes
-    setInterval(() => {
+    this.metricsInterval = setInterval(() => {
       appLogger.logMetrics();
     }, 5 * 60 * 1000);
   }
 
   private async registerCommands(): Promise<void> {
     const commands = Array.from(this.slashCommands.values()).map(cmd => cmd.data.toJSON());
-    const commandNames = commands.map(cmd => cmd.name);
-    logger.info(`Registering commands: ${commandNames.join(', ')}`);
-    
-    const application = this.discordClient.raw.application;
-    if (application) {
-      // Try guild-specific registration first (instant updates)
-      const guild = this.discordClient.raw.guilds.cache.first();
-      if (guild) {
-        // Clear existing commands to prevent duplication
-        await guild.commands.set([]);
-        await guild.commands.set(commands);
-        logger.info(`Registered ${commands.length} slash commands to guild: ${guild.name}`);
-      } else {
-        // Fallback to global registration
-        await application.commands.set(commands);
-        logger.info(`Registered ${commands.length} slash commands globally`);
-      }
+    const isDev = process.env.NODE_ENV === 'development';
+    const devGuildId = process.env.DEV_GUILD_ID;
+    const shouldClearGuilds = process.env.CLEAR_GUILDS === 'true';
+
+    if (shouldClearGuilds) {
+      logger.info('CLEAR_GUILDS flag detected. Cleaning up all guild-specific commands...');
+      await this.commandManager.clearAllGuildCommands();
+      logger.info('Guild command cleanup finished.');
+    }
+
+    if (isDev && devGuildId) {
+      logger.info(`Development mode detected. Syncing commands to guild: ${devGuildId}`);
+      await this.commandManager.syncCommands(commands, { 
+        guildId: devGuildId,
+        clearGlobal: true // Clear global commands to avoid duplicates in dev
+      });
+    } else {
+      logger.info('Syncing commands globally...');
+      await this.commandManager.syncCommands(commands);
     }
   }
 
@@ -149,10 +156,29 @@ class Application {
     const shutdown = async (signal: string) => {
       logger.info(`Received ${signal}, shutting down gracefully`);
       this.abortController.abort();
+
+      // Set a force-exit timeout if cleanup takes too long (10 seconds)
+      const forceExit = setTimeout(() => {
+        logger.error('Graceful shutdown timed out, force exiting...');
+        process.exit(1);
+      }, 10000);
+      forceExit.unref();
       
       try {
-        await this.discordClient.destroy();
+        // 1. Clear intervals
+        if (this.presenceInterval) clearInterval(this.presenceInterval);
+        if (this.metricsInterval) clearInterval(this.metricsInterval);
+
+        // 2. Cleanup Music Service (disconnect all players)
+        await this.musicService.cleanup();
+
+        // 3. Destroy Discord client
+        await this.discordClient.raw.destroy();
+        
+        // 4. Cleanup Logger
         await appLogger.cleanup();
+        
+        clearTimeout(forceExit);
         logger.info('Bot shut down successfully');
         process.exit(0);
       } catch (error) {

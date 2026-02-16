@@ -116,6 +116,19 @@ export class MusicService {
     this.players.delete(guildId);
   }
 
+  async cleanup(): Promise<void> {
+    this.timeoutService.stopMonitoring();
+    const guildIds = Array.from(this.players.keys());
+    logger.info({ count: guildIds.length }, 'Cleaning up all active music players');
+    for (const guildId of guildIds) {
+      try {
+        await this.disconnect(guildId);
+      } catch (error) {
+        logger.error({ guildId, error }, 'Error disconnecting player during cleanup');
+      }
+    }
+  }
+
   getQueue(guildId: string): readonly string[] {
     const player = this.players.get(guildId);
     return player?.getQueue() ?? [];
