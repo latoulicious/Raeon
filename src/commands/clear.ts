@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-clear');
 
@@ -22,16 +23,20 @@ async function execute(
 
   const queue = services.music.getQueue(guildId);
   if (queue.length === 0) {
-    await interaction.followUp('The queue is already empty!');
+    const embed = EmbedService.createErrorEmbed('Clear', 'The queue is already empty!', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
     return;
   }
 
   try {
+    const count = queue.length;
     services.music.clear(guildId);
-    await interaction.followUp(`Cleared ${queue.length} song${queue.length === 1 ? '' : 's'} from the queue.`);
+    const embed = EmbedService.createClearEmbed(count, interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   } catch (error) {
     logger.error({ guildId, error }, 'Error clearing queue');
-    await interaction.followUp('Failed to clear the queue.');
+    const embed = EmbedService.createErrorEmbed('Clear', 'Failed to clear the queue.', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
 }
 

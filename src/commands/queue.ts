@@ -1,5 +1,6 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const data = new SlashCommandBuilder()
   .setName('queue')
@@ -20,78 +21,17 @@ async function execute(
   const queue = services.music.getQueue(guildId);
   const isPlaying = services.music.isPlaying(guildId);
   const isPaused = services.music.isPaused(guildId);
+  const currentTrack = services.music.getCurrentTrack(guildId);
 
-  if (queue.length === 0 && !isPlaying && !isPaused) {
-    await interaction.followUp('The queue is empty!');
-    return;
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle('Music Queue')
-    .setColor('#1DB954')
-    .setThumbnail(interaction.client.user.displayAvatarURL())
-    .setTimestamp();
-
-  if (isPlaying || isPaused) {
-    const currentTrack = services.music.getCurrentTrack(guildId);
-    const videoId = currentTrack ? extractVideoId(currentTrack) : null;
-    const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-    
-    embed.addFields({ 
-      name: 'Now Playing', 
-      value: `${isPaused ? 'Currently Paused' : 'Currently Streaming'}\n[Open in YouTube](${currentTrack || '#'})`,
-      inline: false 
-    });
-    
-    if (thumbnailUrl) {
-      embed.setThumbnail(thumbnailUrl);
-    }
-  }
-
-  if (queue.length > 0) {
-    const queueList = queue.slice(0, 10).map((url, index) => {
-      const videoId = extractVideoId(url);
-      const shortUrl = videoId ? `https://youtu.be/${videoId}` : url;
-      return `${index + 1}. [Open](${shortUrl})`;
-    }).join('\n');
-
-    embed.addFields({ 
-      name: `Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})`, 
-      value: queueList || 'No songs in queue',
-      inline: false 
-    });
-
-    if (queue.length > 10) {
-      embed.setFooter({ 
-        text: `...and ${queue.length - 10} more songs • Total: ${queue.length} songs` 
-      });
-    } else {
-      embed.setFooter({ 
-        text: `Total: ${queue.length} song${queue.length === 1 ? '' : 's'} in queue` 
-      });
-    }
-  } else {
-    embed.setDescription('The queue is empty! Use /play to add songs.');
-    embed.setFooter({ text: 'Queue is empty' });
-  }
+  const embed = EmbedService.createQueueEmbed(
+    queue,
+    currentTrack,
+    isPaused,
+    isPlaying,
+    interaction.client
+  );
 
   await interaction.followUp({ embeds: [embed] });
-}
-
-function extractVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-    /^([^&\n?#]+)$/
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-
-  return null;
 }
 
 export const queueCommand: SlashCommand = {

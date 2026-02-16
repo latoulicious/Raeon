@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-skip');
 
@@ -21,7 +22,8 @@ async function execute(
   }
 
   if (!services.music.isPlaying(guildId)) {
-    await interaction.followUp('Nothing is currently playing!');
+    const embed = EmbedService.createErrorEmbed('Skip', 'Nothing is currently playing!', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
     return;
   }
 
@@ -29,18 +31,14 @@ async function execute(
     const queue = services.music.getQueue(guildId);
     services.music.stop(guildId);
     
-    let message = '**Skipped current song!**';
-    if (queue.length > 0) {
-      message += `\n**Queue**: ${queue.length} song${queue.length === 1 ? '' : 's'} remaining`;
-    } else {
-      message += '\n**Queue**: Empty - add more songs with /play!';
-    }
+    const embed = EmbedService.createSkipEmbed(queue.length, interaction.user);
     
     logger.info({ guildId, userId: interaction.user.id, commandName: 'skip' }, 'Skip command executed successfully');
-    await interaction.followUp(message);
+    await interaction.followUp({ embeds: [embed] });
   } catch (error) {
     logger.error({ guildId, error, userId: interaction.user.id, commandName: 'skip' }, 'Error skipping music');
-    await interaction.followUp('Failed to skip song.');
+    const embed = EmbedService.createErrorEmbed('Skip', 'Failed to skip song.', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
 }
 

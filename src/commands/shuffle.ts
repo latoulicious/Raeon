@@ -1,6 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-shuffle');
 
@@ -25,30 +26,13 @@ async function execute(
   const isPaused = services.music.isPaused(guildId);
 
   if (queue.length === 0 && !isPlaying && !isPaused) {
-    const embed = new EmbedBuilder()
-      .setTitle('Shuffle')
-      .setDescription('No songs in queue to shuffle')
-      .setColor('#FF6B6B')
-      .setFooter({ text: 'Use /play to add songs to the queue' })
-      .setTimestamp();
-
+    const embed = EmbedService.createErrorEmbed('Shuffle', 'No songs in queue to shuffle', interaction.user);
     await interaction.followUp({ embeds: [embed] });
     return;
   }
 
   if (queue.length < 2) {
-    const embed = new EmbedBuilder()
-      .setTitle('Shuffle')
-      .setDescription('Need at least 2 songs in queue to shuffle')
-      .setColor('#FF6B6B')
-      .addFields({
-        name: 'Current Queue',
-        value: queue.length === 1 ? '1 song in queue' : 'Only current song is playing',
-        inline: false
-      })
-      .setFooter({ text: 'Add more songs to enable shuffling' })
-      .setTimestamp();
-
+    const embed = EmbedService.createErrorEmbed('Shuffle', 'Need at least 2 songs in queue to shuffle', interaction.user);
     await interaction.followUp({ embeds: [embed] });
     return;
   }
@@ -56,36 +40,14 @@ async function execute(
   try {
     services.music.shuffle(guildId);
     
-    const embed = new EmbedBuilder()
-      .setTitle('Shuffled')
-      .setDescription('Queue has been shuffled')
-      .setColor('#9B59B6')
-      .addFields({
-        name: 'Queue Status',
-        value: `${queue.length} song${queue.length === 1 ? '' : 's'} shuffled`,
-        inline: true
-      })
-      .addFields({
-        name: 'Status',
-        value: isPlaying ? 'Currently playing' : isPaused ? 'Paused' : 'Not playing',
-        inline: true
-      })
-      .addFields({
-        name: 'Tip',
-        value: 'Use /queue to see the new order',
-        inline: false
-      })
-      .setFooter({ 
-        text: 'Requested by ' + interaction.user.tag,
-        iconURL: interaction.user.displayAvatarURL()
-      })
-      .setTimestamp();
+    const embed = EmbedService.createShuffleEmbed(queue.length, interaction.user);
 
     await interaction.followUp({ embeds: [embed] });
     logger.info({ guildId, queueSize: queue.length }, 'Queue shuffled');
   } catch (error) {
     logger.error({ guildId, error }, 'Error shuffling queue');
-    await interaction.followUp('Failed to shuffle queue.');
+    const embed = EmbedService.createErrorEmbed('Shuffle', 'Failed to shuffle queue.', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
 }
 

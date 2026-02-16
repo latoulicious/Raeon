@@ -1,6 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-resume');
 
@@ -26,35 +27,13 @@ async function execute(
   const pausedTrack = services.music.getCurrentTrack(guildId);
 
   if (isPlaying) {
-    const embed = new EmbedBuilder()
-      .setTitle('Resume')
-      .setDescription('Music is already playing!')
-      .setColor('#FF6B6B')
-      .setFooter({ text: 'Use /pause to pause the current song' })
-      .setTimestamp();
-
+    const embed = EmbedService.createErrorEmbed('Resume', 'Music is already playing!', interaction.user);
     await interaction.followUp({ embeds: [embed] });
     return;
   }
 
   if (!isPaused) {
-    const embed = new EmbedBuilder()
-      .setTitle('Resume')
-      .setDescription('No paused music to resume')
-      .setColor('#FF6B6B')
-      .addFields({
-        name: 'Queue Status',
-        value: queue.length > 0 ? `${queue.length} song${queue.length === 1 ? '' : 's'} in queue` : 'Queue is empty',
-        inline: false
-      })
-      .addFields({
-        name: 'Suggestion',
-        value: queue.length > 0 ? 'Use /play to start music' : 'Use /play to add songs to the queue',
-        inline: false
-      })
-      .setFooter({ text: 'Music must be paused before resuming' })
-      .setTimestamp();
-
+    const embed = EmbedService.createErrorEmbed('Resume', 'No paused music to resume', interaction.user);
     await interaction.followUp({ embeds: [embed] });
     return;
   }
@@ -62,36 +41,14 @@ async function execute(
   try {
     await services.music.resume(guildId);
     
-    const embed = new EmbedBuilder()
-      .setTitle('Resumed')
-      .setDescription('Playback has been resumed')
-      .setColor('#00FF00')
-      .addFields({
-        name: 'Song',
-        value: `[Now playing](${pausedTrack || '#'})`,
-        inline: false
-      })
-      .addFields({
-        name: 'Queue Status',
-        value: queue.length > 0 ? `${queue.length} song${queue.length === 1 ? '' : 's'} remaining` : 'Last song in queue',
-        inline: true
-      })
-      .addFields({
-        name: 'Status',
-        value: 'Playing',
-        inline: true
-      })
-      .setFooter({ 
-        text: 'Requested by ' + interaction.user.tag,
-        iconURL: interaction.user.displayAvatarURL()
-      })
-      .setTimestamp();
+    const embed = EmbedService.createResumeEmbed(pausedTrack, queue.length, interaction.user);
 
     await interaction.followUp({ embeds: [embed] });
     logger.info({ guildId, track: pausedTrack }, 'Music resumed');
   } catch (error) {
     logger.error({ guildId, error }, 'Error resuming music');
-    await interaction.followUp('Failed to resume music.');
+    const embed = EmbedService.createErrorEmbed('Resume', 'Failed to resume music.', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
 }
 

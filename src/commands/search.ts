@@ -1,6 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-search');
 
@@ -42,51 +43,21 @@ async function execute(
     const results = await (extractor as any).search(query, limit);
 
     if (results.length === 0) {
-      await interaction.followUp('No results found for your search query.');
+      const embed = EmbedService.createErrorEmbed('Search', `No results found for "${query}"`, interaction.user);
+      await interaction.followUp({ embeds: [embed] });
       return;
     }
 
-    // Create embed for search results
-    const embed = new EmbedBuilder()
-      .setTitle(`Search Results for "${query}"`)
-      .setColor('#FF0000')
-      .setThumbnail(interaction.client.user.displayAvatarURL())
-      .setDescription(`Found ${results.length} result${results.length === 1 ? '' : 's'} for your search`)
-      .setTimestamp();
-
-    results.forEach((result: any, index: number) => {
-      const duration = result.duration === 'Unknown' ? 'Unknown' : 
-        typeof result.duration === 'number' ? formatDuration(result.duration) : result.duration;
-      
-      embed.addFields({
-        name: `${index + 1}. ${result.title}`,
-        value: `**${result.uploader}** | **${duration}**\n[Click to play](${result.url})\n\`/play ${result.url}\``,
-        inline: false
-      });
-    });
-
-    embed.setFooter({ 
-      text: `Use /play with the URL or try /play ytsearch1:"song name" for direct search • Results: ${results.length}/${limit}` 
-    });
+    const embed = EmbedService.createSearchEmbed(query, results, limit, interaction.client);
 
     await interaction.followUp({ embeds: [embed] });
     logger.info({ query, resultCount: results.length, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Search completed successfully');
 
   } catch (error) {
     logger.error({ query, limit, error, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Error during search');
-    await interaction.followUp('Failed to search for songs. Please try again later.');
+    const embed = EmbedService.createErrorEmbed('Search', 'Failed to search for songs. Please try again later.', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
 export const searchCommand: SlashCommand = {

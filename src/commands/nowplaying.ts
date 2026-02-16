@@ -1,6 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-nowplaying');
 
@@ -26,78 +27,27 @@ async function execute(
   const queue = services.music.getQueue(guildId);
 
   if (!isPlaying && !isPaused) {
-    const embed = new EmbedBuilder()
-      .setTitle('Now Playing')
-      .setDescription('Nothing is currently playing')
-      .setColor('#FF6B6B')
-      .addFields({
-        name: 'Queue Status',
-        value: queue.length > 0 ? `${queue.length} song${queue.length === 1 ? '' : 's'} in queue` : 'Queue is empty',
-        inline: false
-      })
-      .setFooter({ text: 'Use /play to start playing music' })
-      .setTimestamp();
-
+    const embed = EmbedService.createEmptyQueueEmbed(interaction.client);
     await interaction.followUp({ embeds: [embed] });
     return;
   }
 
-  // Extract video ID from YouTube URL for thumbnail
-  const videoId = currentTrack ? extractVideoId(currentTrack) : null;
-  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-
-  const embed = new EmbedBuilder()
-    .setTitle('Now Playing')
-    .setDescription(isPaused ? 'Currently Paused' : 'Currently Streaming')
-    .setColor(isPaused ? '#FFA500' : '#1DB954')
-    .setURL(currentTrack)
-    .addFields(
-      {
-        name: 'URL',
-        value: `[Click to open](${currentTrack})`,
-        inline: false
-      },
-      {
-        name: 'Queue Status',
-        value: queue.length > 0 
-          ? `${queue.length} song${queue.length === 1 ? '' : 's'} waiting` 
-          : 'Queue is empty',
-        inline: true
-      },
-      {
-        name: 'Status',
-        value: isPaused ? 'Paused' : 'Playing',
-        inline: true
-      }
-    )
-    .setFooter({ 
-      text: 'Requested by ' + interaction.user.tag,
-      iconURL: interaction.user.displayAvatarURL()
-    })
-    .setTimestamp();
-
-  if (thumbnailUrl) {
-    embed.setThumbnail(thumbnailUrl);
+  if (!currentTrack) {
+    const embed = EmbedService.createEmptyQueueEmbed(interaction.client);
+    await interaction.followUp({ embeds: [embed] });
+    return;
   }
+
+  const embed = EmbedService.createNowPlayingEmbed(
+    currentTrack,
+    isPaused,
+    queue.length,
+    interaction.user,
+    interaction.client
+  );
 
   await interaction.followUp({ embeds: [embed] });
   logger.info({ guildId, track: currentTrack }, 'Now playing command executed');
-}
-
-function extractVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-    /^([^&\n?#]+)$/
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-
-  return null;
 }
 
 export const nowplayingCommand: SlashCommand = {

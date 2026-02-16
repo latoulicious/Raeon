@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { MusicServiceError } from '../application/services/music.service.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-play');
 
@@ -71,24 +72,20 @@ async function execute(
     await services.music.play(guildId, channelId, finalUrl);
     const queue = services.music.getQueue(guildId);
     
-    let message = '**Song added to queue!**';
-    if (queue.length === 0) {
-      message += `\n**Now playing**: ${finalUrl}`;
-    } else {
-      message += `\n**Queue**: ${queue.length} song${queue.length === 1 ? '' : 's'} remaining`;
-      message += `\n**Next up**: ${finalUrl}`;
-    }
+    const embed = EmbedService.createPlayEmbed(finalUrl, queue.length, interaction.user, interaction.client);
     
     logger.info({ guildId, url: finalUrl, userId: interaction.user.id, commandName: 'play' }, 'Play command executed successfully');
-    await interaction.followUp(message);
+    await interaction.followUp({ embeds: [embed] });
   } catch (error) {
     logger.error({ guildId, url, error, userId: interaction.user.id, commandName: 'play' }, 'Error playing music');
     
     if (error instanceof MusicServiceError) {
-      await interaction.followUp(error.userFriendlyMessage);
+      const embed = EmbedService.createErrorEmbed('Error', error.userFriendlyMessage, interaction.user);
+      await interaction.followUp({ embeds: [embed] });
     } else {
       const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
-      await interaction.followUp(`Error: ${errorMessage}`);
+      const embed = EmbedService.createErrorEmbed('Error', errorMessage, interaction.user);
+      await interaction.followUp({ embeds: [embed] });
     }
   }
 }

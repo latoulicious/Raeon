@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
+import { EmbedService } from '../infrastructure/embed.js';
 
 const logger = appLogger.getLogger('command-stop');
 
@@ -23,10 +24,12 @@ async function execute(
   try {
     await services.music.disconnect(guildId);
     logger.info({ guildId, userId: interaction.user.id, commandName: 'stop' }, 'Stop command executed successfully');
-    await interaction.followUp('**Stopped playing music and disconnected from voice channel.**');
+    const embed = EmbedService.createStopEmbed(interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   } catch (error) {
     logger.error({ guildId, error, userId: interaction.user.id, commandName: 'stop' }, 'Error stopping music');
-    await interaction.followUp('Failed to stop music.');
+    const embed = EmbedService.createErrorEmbed('Stop', 'Failed to stop music.', interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
 }
 
