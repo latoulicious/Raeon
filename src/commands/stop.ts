@@ -22,9 +22,10 @@ async function execute(
 
   try {
     await services.music.disconnect(guildId);
-    await interaction.followUp('Stopped playing music and disconnected from voice channel.');
+    logger.info({ guildId, userId: interaction.user.id, commandName: 'stop' }, 'Stop command executed successfully');
+    await interaction.followUp('**Stopped playing music and disconnected from voice channel.**');
   } catch (error) {
-    logger.error({ guildId, error }, 'Error stopping music');
+    logger.error({ guildId, error, userId: interaction.user.id, commandName: 'stop' }, 'Error stopping music');
     await interaction.followUp('Failed to stop music.');
   }
 }

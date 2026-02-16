@@ -138,7 +138,16 @@ export class YtdlpExtractor implements AudioExtractor {
 
         try {
           const results = JSON.parse(stdout);
-          const searchResults: any[] = Array.isArray(results) ? results : [results];
+          
+          // Handle search results which are in an 'entries' array
+          let searchResults: any[];
+          if (results.entries && Array.isArray(results.entries)) {
+            searchResults = results.entries;
+          } else if (Array.isArray(results)) {
+            searchResults = results;
+          } else {
+            searchResults = [results];
+          }
           
           const formattedResults = searchResults.map((item: any) => ({
             title: item.title || 'Unknown Title',
@@ -146,7 +155,7 @@ export class YtdlpExtractor implements AudioExtractor {
                  item.url && !item.url.startsWith('ytsearch') ? item.url :
                  item.id ? `https://www.youtube.com/watch?v=${item.id}` : '',
             duration: item.duration || 'Unknown',
-            uploader: item.uploader || item.channel || item.uploader_name || 'Unknown Uploader'
+            uploader: item.uploader || item.channel || item.uploader_name || item.uploader || 'Unknown Uploader'
           }));
 
           logger.info({ query, resultCount: formattedResults.length }, 'Search completed successfully');

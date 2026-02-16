@@ -69,8 +69,18 @@ async function execute(
     }
 
     await services.music.play(guildId, channelId, finalUrl);
+    const queue = services.music.getQueue(guildId);
+    
+    let message = '**Song added to queue!**';
+    if (queue.length === 0) {
+      message += `\n**Now playing**: ${finalUrl}`;
+    } else {
+      message += `\n**Queue**: ${queue.length} song${queue.length === 1 ? '' : 's'} remaining`;
+      message += `\n**Next up**: ${finalUrl}`;
+    }
+    
     logger.info({ guildId, url: finalUrl, userId: interaction.user.id, commandName: 'play' }, 'Play command executed successfully');
-    await interaction.followUp(`Now playing: ${finalUrl}`);
+    await interaction.followUp(message);
   } catch (error) {
     logger.error({ guildId, url, error, userId: interaction.user.id, commandName: 'play' }, 'Error playing music');
     

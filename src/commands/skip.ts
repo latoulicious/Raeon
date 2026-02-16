@@ -26,10 +26,20 @@ async function execute(
   }
 
   try {
+    const queue = services.music.getQueue(guildId);
     services.music.stop(guildId);
-    await interaction.followUp('Skipped current song!');
+    
+    let message = '**Skipped current song!**';
+    if (queue.length > 0) {
+      message += `\n**Queue**: ${queue.length} song${queue.length === 1 ? '' : 's'} remaining`;
+    } else {
+      message += '\n**Queue**: Empty - add more songs with /play!';
+    }
+    
+    logger.info({ guildId, userId: interaction.user.id, commandName: 'skip' }, 'Skip command executed successfully');
+    await interaction.followUp(message);
   } catch (error) {
-    logger.error({ guildId, error }, 'Error skipping music');
+    logger.error({ guildId, error, userId: interaction.user.id, commandName: 'skip' }, 'Error skipping music');
     await interaction.followUp('Failed to skip song.');
   }
 }
