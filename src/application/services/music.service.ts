@@ -3,6 +3,7 @@ import { GuildPlayer, GuildPlayerError } from '../../domain/guild-player.js';
 import { YtdlpExtractorError } from '../../infrastructure/yt-dlp.js';
 import { FfmpegEncoderError } from '../../infrastructure/ffmpeg.js';
 import { appLogger } from '../../infrastructure/logger.js';
+import { TimeoutService } from '../../infrastructure/timeout.js';
 
 const logger = appLogger.getLogger('music-service');
 
@@ -13,21 +14,52 @@ export class MusicServiceError extends Error {
   }
 }
 
+export type TimeoutNotificationCallback = (guildId: string, textChannelId: string) => Promise<void>;
+
 export class MusicService {
   private readonly players = new Map<string, GuildPlayer>();
+  private readonly timeoutService: TimeoutService;
+  private readonly lastTextChannelIds = new Map<string, string>();
 
   constructor(
     private readonly voiceGateway: VoiceGateway,
     private readonly extractor: AudioExtractor,
     private readonly encoder: AudioEncoder,
-  ) {}
+    private readonly onTimeoutNotification?: TimeoutNotificationCallback,
+  ) {
+    this.timeoutService = new TimeoutService(async (guildId) => {
+      const player = this.players.get(guildId);
+      if (player && player.getIsPlaying()) {
+        // If still playing, it's not idle. Reset activity.
+        this.timeoutService.updateActivity(guildId);
+        return;
+      }
+      
+      logger.info({ guildId }, 'Idle timeout reached, disconnecting');
+      
+      // Send notification if we have a text channel ID
+      const textChannelId = this.lastTextChannelIds.get(guildId);
+      if (textChannelId && this.onTimeoutNotification) {
+        try {
+          await this.onTimeoutNotification(guildId, textChannelId);
+        } catch (error) {
+          logger.error({ guildId, error }, 'Failed to send timeout notification');
+        }
+      }
+
+      await this.disconnect(guildId);
+    });
+    this.timeoutService.startMonitoring();
+  }
 
   getExtractor(): AudioExtractor {
     return this.extractor;
   }
 
-  async play(guildId: string, channelId: string, url: string): Promise<void> {
+  async play(guildId: string, voiceChannelId: string, textChannelId: string, url: string): Promise<void> {
     try {
+      this.timeoutService.updateActivity(guildId);
+      this.lastTextChannelIds.set(guildId, textChannelId);
       let player = this.players.get(guildId);
       
       if (!player) {
@@ -47,7 +79,7 @@ export class MusicService {
         );
       }
 
-      await this.voiceGateway.join(guildId, channelId);
+      await this.voiceGateway.join(guildId, voiceChannelId);
       player.enqueue(url);
       logger.debug({ guildId, url, queueSize: currentQueue.length + 1 }, 'Added track to queue');
       
@@ -61,6 +93,7 @@ export class MusicService {
   }
 
   stop(guildId: string): void {
+    this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
       player.stop();
@@ -68,6 +101,7 @@ export class MusicService {
   }
 
   clear(guildId: string): void {
+    this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
       player.clear();
@@ -75,6 +109,8 @@ export class MusicService {
   }
 
   async disconnect(guildId: string): Promise<void> {
+    this.timeoutService.removeGuild(guildId);
+    this.lastTextChannelIds.delete(guildId);
     this.clear(guildId);
     await this.voiceGateway.disconnect(guildId);
     this.players.delete(guildId);
@@ -96,6 +132,7 @@ export class MusicService {
   }
 
   pause(guildId: string): void {
+    this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
       player.pause();
@@ -103,6 +140,7 @@ export class MusicService {
   }
 
   async resume(guildId: string): Promise<void> {
+    this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
       await player.resume();
@@ -110,6 +148,7 @@ export class MusicService {
   }
 
   shuffle(guildId: string): void {
+    this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
       player.shuffle();
@@ -117,6 +156,7 @@ export class MusicService {
   }
 
   remove(guildId: string, position: number): string | null {
+    this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     return player?.remove(position) ?? null;
   }

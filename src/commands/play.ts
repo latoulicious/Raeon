@@ -36,7 +36,8 @@ async function execute(
 
   const url = interaction.options.getString('url', true);
   const guildId = interaction.guildId;
-  const channelId = voiceChannel.id;
+  const voiceChannelId = voiceChannel.id;
+  const textChannelId = interaction.channelId;
 
   try {
     // Handle search queries (ytsearch format)
@@ -69,7 +70,7 @@ async function execute(
       logger.debug({ originalQuery: url, finalUrl, resultCount: results.length }, 'Resolved search query to URL');
     }
 
-    await services.music.play(guildId, channelId, finalUrl);
+    await services.music.play(guildId, voiceChannelId, textChannelId, finalUrl);
     const queue = services.music.getQueue(guildId);
     
     const embed = EmbedService.createPlayEmbed(finalUrl, queue.length, interaction.user, interaction.client);

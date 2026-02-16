@@ -24,6 +24,7 @@ import { removeCommand } from './commands/remove.js';
 import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
 import { StartupValidationError } from './infrastructure/startup-validator.js';
+import { EmbedService } from './infrastructure/embed.js';
 
 const logger = appLogger.getLogger('main');
 
@@ -44,7 +45,22 @@ class Application {
     const voiceGateway = new VoiceGateway();
 
     this.pingService = new PingService();
-    this.musicService = new MusicService(voiceGateway, extractor, encoder);
+    this.musicService = new MusicService(
+      voiceGateway,
+      extractor,
+      encoder,
+      async (guildId, textChannelId) => {
+        try {
+          const channel = await this.discordClient.raw.channels.fetch(textChannelId);
+          if (channel?.isTextBased()) {
+            const embed = EmbedService.createTimeoutEmbed();
+            await (channel as any).send({ embeds: [embed] });
+          }
+        } catch (error) {
+          logger.error({ guildId, textChannelId, error }, 'Failed to send timeout notification');
+        }
+      }
+    );
 
     this.slashCommands.set(pingCommand.data.name, pingCommand);
     this.slashCommands.set(playCommand.data.name, playCommand);

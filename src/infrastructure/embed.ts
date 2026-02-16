@@ -310,6 +310,12 @@ export class EmbedService {
       );
   }
 
+  static createTimeoutEmbed(): EmbedBuilder {
+    return this.createBaseEmbed('Idle Timeout', this.COLORS.WARNING)
+      .setDescription('Disconnected from voice channel due to 5 minutes of inactivity.')
+      .setFooter({ text: 'Use /play to start music again' });
+  }
+
   static createHelpEmbed(client: Client): EmbedBuilder {
     const embed = this.createBaseEmbed('Raeon', this.COLORS.PRIMARY)
       .setURL('https://github.com/latoulicious/Raeon')
