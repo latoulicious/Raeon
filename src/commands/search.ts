@@ -30,7 +30,7 @@ async function execute(
   const limit = interaction.options.getInteger('limit') ?? 10;
 
   try {
-    logger.debug({ query, limit, user: interaction.user.id }, 'Executing search command');
+    logger.debug({ query, limit, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Executing search command');
 
     // Get the extractor from the music service
     const extractor = services.music.getExtractor();
@@ -70,10 +70,10 @@ async function execute(
     });
 
     await interaction.followUp({ embeds: [embed] });
-    logger.info({ query, resultCount: results.length, user: interaction.user.id }, 'Search completed successfully');
+    logger.info({ query, resultCount: results.length, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Search completed successfully');
 
   } catch (error) {
-    logger.error({ query, limit, error, user: interaction.user.id }, 'Error during search');
+    logger.error({ query, limit, error, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Error during search');
     await interaction.followUp('Failed to search for songs. Please try again later.');
   }
 }

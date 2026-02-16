@@ -69,9 +69,10 @@ async function execute(
     }
 
     await services.music.play(guildId, channelId, finalUrl);
+    logger.info({ guildId, url: finalUrl, userId: interaction.user.id, commandName: 'play' }, 'Play command executed successfully');
     await interaction.followUp(`Now playing: ${finalUrl}`);
   } catch (error) {
-    logger.error({ guildId, url, error }, 'Error playing music');
+    logger.error({ guildId, url, error, userId: interaction.user.id, commandName: 'play' }, 'Error playing music');
     
     if (error instanceof MusicServiceError) {
       await interaction.followUp(error.userFriendlyMessage);

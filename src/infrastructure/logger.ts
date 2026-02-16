@@ -80,22 +80,26 @@ export class AppLogger {
 
       childLogger.info = (obj: any, msg?: string, ...args: any[]) => {
         originalMethods.info(obj, msg, ...args);
-        this.logToDatabase('info', msg || '', module, obj);
+        const { guildId, userId, commandName, ...rest } = obj || {};
+        this.logToDatabase('info', msg || '', module, rest, guildId, userId, commandName);
       };
 
       childLogger.warn = (obj: any, msg?: string, ...args: any[]) => {
         originalMethods.warn(obj, msg, ...args);
-        this.logToDatabase('warn', msg || '', module, obj);
+        const { guildId, userId, commandName, ...rest } = obj || {};
+        this.logToDatabase('warn', msg || '', module, rest, guildId, userId, commandName);
       };
 
       childLogger.error = (obj: any, msg?: string, ...args: any[]) => {
         originalMethods.error(obj, msg, ...args);
-        this.logToDatabase('error', msg || '', module, obj);
+        const { guildId, userId, commandName, ...rest } = obj || {};
+        this.logToDatabase('error', msg || '', module, rest, guildId, userId, commandName);
       };
 
       childLogger.debug = (obj: any, msg?: string, ...args: any[]) => {
         originalMethods.debug(obj, msg, ...args);
-        this.logToDatabase('debug', msg || '', module, obj);
+        const { guildId, userId, commandName, ...rest } = obj || {};
+        this.logToDatabase('debug', msg || '', module, rest, guildId, userId, commandName);
       };
 
       return childLogger;
