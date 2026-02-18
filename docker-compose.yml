@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  raeon-bot:
+    build: .
+    container_name: raeon-discord-bot
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - raeon-network
+    volumes:
+      # Mount cookies file if needed for yt-dlp
+      - ./cookies.txt:/app/cookies.txt:ro
+    healthcheck:
+      test: ["CMD", "node", "dist/main.js", "--health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: raeon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: raeon
+      POSTGRES_USER: raeon
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - raeon-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raeon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Redis for caching (if needed in future)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: raeon-redis
+  #   restart: unless-stopped
+  #   networks:
+  #     - raeon-network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+
+networks:
+  raeon-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
