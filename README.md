@@ -66,3 +66,20 @@
    ```
 
 For detailed Docker commands and management, see [DOCKER.md](./DOCKER.md).
+
+## Releases
+
+For information about creating releases and version management, see [RELEASE.md](./RELEASE.md).
+
+### Quick Release Commands
+
+```bash
+# Patch release (bug fixes)
+npm run release:patch
+
+# Minor release (new features)  
+npm run release:minor
+
+# Major release (breaking changes)
+npm run release:major
+```
