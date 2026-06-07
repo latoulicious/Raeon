@@ -26,6 +26,17 @@ verification. Playback fixes (F-6/F-7) remain unapproved in
 [nice-to-have.md](nice-to-have.md).
 
 Progress: **R0–R3 shipped 2026-06-07** (`3bc5e93`, `a7d035f`,
-`4c60d6d`). **R4/R5/R6 deferred** pending the user's yt-dlp/ffmpeg
-replacement plan — Docker refactor would otherwise be built twice.
-Approval stands; execution resumes when the replacement is specced.
+`4c60d6d`). **R4/R5/R6 superseded** — absorbed into the Lavalink
+migration plan's L5/L6 phases (the replacement is now specced).
+
+## Lavalink migration L0–L6 (approved 2026-06-07)
+
+[lavalink-plan.md](lavalink-plan.md) — replace the yt-dlp → ffmpeg →
+@discordjs/voice pipeline with a Dockerized Lavalink v4 node driven via
+Shoukaku 4.3.0; YouTube parity first (lavasrc stays nice-to-have).
+Absorbs the deferred Docker refactor; on completion closes F-1..F-4,
+F-6, F-7, F-9, F-10 plus the single-guild voice, resume-restart, and
+cookies constraints.
+
+Progress: not started — **L0 begins next session** (user decision
+2026-06-07).
