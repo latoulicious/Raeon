@@ -11,6 +11,7 @@ export interface Track {
 /** Outcome of resolving a URL or search identifier against Lavalink. */
 export type ResolveResult =
   | { kind: 'track'; track: Track }
-  | { kind: 'playlist'; track: Track; playlistName: string; totalTracks: number }
+  /** `track` is the linked/selected video; `tracks` is the whole list. */
+  | { kind: 'playlist'; track: Track; tracks: Track[]; playlistName: string }
   | { kind: 'search'; tracks: Track[] }
   | { kind: 'empty' };

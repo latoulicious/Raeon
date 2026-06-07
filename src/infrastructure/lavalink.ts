@@ -141,8 +141,8 @@ export class LavalinkClient {
         return {
           kind: 'playlist',
           track: toDomainTrack(track),
+          tracks: result.data.tracks.map(toDomainTrack),
           playlistName: result.data.info.name,
-          totalTracks: result.data.tracks.length,
         };
       }
       case LoadType.ERROR:

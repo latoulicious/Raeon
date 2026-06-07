@@ -63,7 +63,7 @@ async function execute(
         break;
       case 'playlist':
         track = result.track;
-        playlistNotice = `Playlist "${result.playlistName}" detected (${result.totalTracks} tracks) — queued the linked track only. Playlists are not supported yet.`;
+        playlistNotice = `Playlist "${result.playlistName}" detected (${result.tracks.length} tracks) — queued the linked track only. Playlists are not supported yet.`;
         break;
       case 'empty':
         break;
