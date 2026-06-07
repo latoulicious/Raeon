@@ -127,8 +127,8 @@ create_git_tag() {
     
     log_info "Creating git commit and tag: $tag_name"
     
-    # Add updated package.json
-    git add package.json
+    # Add updated package.json + lockfile (npm version bumps both)
+    git add package.json package-lock.json
     git commit -m "chore(release): bump version to $tag_name"
     
     # Create annotated tag
