@@ -41,6 +41,7 @@ Start here:
 - [Known Constraints](known-constraints.md)
 - [Stabilization Plan](stabilization-plan.md)
 - [Lavalink Migration Plan](lavalink-plan.md)
+- [Embed UX Refresh Plan](ux-refresh-plan.md)
 - [Implementation Tracker](implementation-tracker.md)
 - [Nice-to-have / Known Gaps](nice-to-have.md)
 - [Approved To Implement](approved-to-implement.md)
