@@ -1,0 +1,41 @@
+server:
+  port: 2333
+  address: 0.0.0.0
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.1"
+      snapshot: false
+  server:
+    # Resolved from the container environment; boot fails if unset.
+    password: "${LAVALINK_SERVER_PASSWORD}"
+    sources:
+      # Built-in lavaplayer YouTube is replaced by the youtube-source plugin.
+      youtube: false
+      # YouTube parity only (lavalink-plan.md scope); everything else off.
+      bandcamp: false
+      soundcloud: false
+      twitch: false
+      vimeo: false
+      nico: false
+      http: false
+      local: false
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: true
+    clients:
+      - MUSIC
+      - ANDROID_VR
+      - WEB
+      - WEBEMBEDDED
+    # oauth/poToken auth hooks intentionally unset — configure only if
+    # YouTube starts blocking this node (lavalink-plan.md risk register).
+
+logging:
+  level:
+    root: INFO
+    lavalink: INFO

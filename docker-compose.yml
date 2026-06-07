@@ -24,6 +24,27 @@ services:
       retries: 3
       start_period: 40s
 
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4
+    container_name: raeon-lavalink
+    restart: unless-stopped
+    environment:
+      - LAVALINK_SERVER_PASSWORD=${LAVALINK_PASSWORD}
+    volumes:
+      - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
+    ports:
+      # Host-local only; the bot runs on the host until L5 moves it into compose
+      - "127.0.0.1:2333:2333"
+    networks:
+      - raeon-network
+    healthcheck:
+      # $$ escapes compose interpolation; resolved inside the container
+      test: ["CMD-SHELL", "curl -sf -H \"Authorization: $${LAVALINK_SERVER_PASSWORD}\" http://localhost:2333/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   postgres:
     image: postgres:15-alpine
     container_name: raeon-postgres

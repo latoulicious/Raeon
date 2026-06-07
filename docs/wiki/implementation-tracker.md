@@ -43,6 +43,7 @@ Status legend:
 | Database | partial | `logs` table auto-created at boot; no migrations; no business data. | Unbounded growth — `nice-to-have.md`. |
 | Message/reaction handlers | reserved | Events wired, handlers are no-op stubs. | Define a use case first. |
 | Dependencies | done | Current as of 2026-06-07 (stabilization R1/R3): discord.js 14.26.4, pino 10.3.1, TS 5.9.3 + NodeNext, @types/node 24, engines `>=24`. Remaining advisory: F-10 (tar, accepted). | `stabilization-plan.md`. |
-| Docker | partial | Dockerfile + compose (bot + postgres15) exist; open findings F-1..F-3, F-9 + node:18 base (F-4). Refactor (R4/R5) deferred until the yt-dlp/ffmpeg replacement plan exists. | `stabilization-plan.md` / `findings.md`. |
+| Docker | partial | Dockerfile + compose (bot + postgres15) exist; open findings F-1..F-3, F-9 + node:18 base (F-4). Bot-image refactor absorbed into the Lavalink migration (L5). | `lavalink-plan.md` / `findings.md`. |
+| Lavalink node | partial | Compose service `lavalink` (ghcr v4, youtube-source 1.18.1, `/version` healthcheck, yml mounted ro) boots healthy standalone (L0, verified 2026-06-07). Bot not wired yet — Shoukaku lands at L1. | `lavalink-plan.md`. |
 | Release tooling | done | `scripts/release.sh` via npm scripts: clean-tree check, bump, tag, push, optional gh release. | — |
 | Tests | deferred | No test suite; verification is `npm run build` + live checks. | `nice-to-have.md`. |

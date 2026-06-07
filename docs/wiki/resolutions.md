@@ -29,3 +29,12 @@ without a resolution here is still open.
 Open: F-1, F-2, F-3, F-4 (Dockerfile part), F-6, F-7, F-8, F-9, F-10
 (accepted). Docker findings wait on the deferred R4/R5 phases; playback
 findings are unapproved in [nice-to-have.md](nice-to-have.md).
+
+## 2026-06-07 — L0
+
+- **F-11** rejected — refuted by live test against the running node
+  (Lavalink 4.2.2): `GET /version` without the header returns `401`;
+  with it, `4.2.2`. v4 secures all REST endpoints (the public
+  `/version` was v3 behavior). Removing the header would make the
+  healthcheck fail permanently. Header kept, `$$`-escaped so the
+  password resolves in-container, not in compose interpolation.
