@@ -24,11 +24,11 @@ export class LavalinkError extends Error {
 class ShoukakuPlayerAdapter implements PlayerPort {
   constructor(private readonly player: Player) {
     this.player.on('exception', (event) => {
-      appLogger.incrementStreamFailures();
+      appLogger.incrementPlayerErrors();
       logger.error({ guildId: player.guildId, exception: event.exception }, 'Track exception');
     });
     this.player.on('stuck', (event) => {
-      appLogger.incrementStreamFailures();
+      appLogger.incrementPlayerErrors();
       logger.warn({ guildId: player.guildId, thresholdMs: event.thresholdMs }, 'Track stuck');
     });
     this.player.on('closed', (event) => {

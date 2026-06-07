@@ -54,6 +54,7 @@ export class MusicService {
     try {
       return await this.lavalink.resolve(identifier);
     } catch (error) {
+      appLogger.incrementTrackLoadFailures();
       throw this.handleServiceError(error);
     }
   }
@@ -216,7 +217,7 @@ export class MusicService {
 
   private handlePlaybackError(guildId: string, error: unknown): void {
     logger.error({ guildId, error }, 'Error during playback');
-    appLogger.incrementStreamFailures();
+    appLogger.incrementPlayerErrors();
   }
 
   private handleServiceError(error: unknown): MusicServiceError {

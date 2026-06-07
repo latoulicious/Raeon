@@ -84,8 +84,6 @@ class Application {
   }
 
   async start(config: any): Promise<void> {
-    (global as any).client = this.discordClient.raw;
-
     this.discordClient.once('ready', () => {
       logger.info('Bot is ready');
       updatePresence(this.discordClient.raw, this.musicService);

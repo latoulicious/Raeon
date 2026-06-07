@@ -4,9 +4,8 @@ import { DatabaseLogger, LogEntry } from './database-logger.js';
 export interface Metrics {
   total_commands: number;
   active_players: number;
-  stream_failures: number;
-  yt_dlp_failures: number;
-  ffmpeg_failures: number;
+  track_load_failures: number;
+  player_errors: number;
 }
 
 export class AppLogger {
@@ -36,9 +35,8 @@ export class AppLogger {
     this.metrics = {
       total_commands: 0,
       active_players: 0,
-      stream_failures: 0,
-      yt_dlp_failures: 0,
-      ffmpeg_failures: 0
+      track_load_failures: 0,
+      player_errors: 0
     };
   }
 
@@ -153,19 +151,14 @@ export class AppLogger {
     this.logger.debug({ metric: 'active_players', value: this.metrics.active_players }, 'Active player removed');
   }
 
-  incrementStreamFailures(): void {
-    this.metrics.stream_failures++;
-    this.logger.warn({ metric: 'stream_failures', value: this.metrics.stream_failures }, 'Stream failure recorded');
+  incrementTrackLoadFailures(): void {
+    this.metrics.track_load_failures++;
+    this.logger.warn({ metric: 'track_load_failures', value: this.metrics.track_load_failures }, 'Track load failure recorded');
   }
 
-  incrementYtdlpFailures(): void {
-    this.metrics.yt_dlp_failures++;
-    this.logger.warn({ metric: 'yt_dlp_failures', value: this.metrics.yt_dlp_failures }, 'yt-dlp failure recorded');
-  }
-
-  incrementFfmpegFailures(): void {
-    this.metrics.ffmpeg_failures++;
-    this.logger.warn({ metric: 'ffmpeg_failures', value: this.metrics.ffmpeg_failures }, 'FFmpeg failure recorded');
+  incrementPlayerErrors(): void {
+    this.metrics.player_errors++;
+    this.logger.warn({ metric: 'player_errors', value: this.metrics.player_errors }, 'Player error recorded');
   }
 
   logMetrics(): void {

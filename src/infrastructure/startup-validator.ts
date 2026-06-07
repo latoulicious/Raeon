@@ -1,5 +1,3 @@
-import { spawn } from 'node:child_process';
-import { promisify } from 'node:util';
 import { appLogger } from './logger.js';
 
 const logger = appLogger.getLogger('startup-validator');
@@ -9,38 +7,6 @@ export class StartupValidationError extends Error {
     super(message);
     this.name = 'StartupValidationError';
   }
-}
-
-async function checkCommandExists(command: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Use appropriate version flag for each command
-    const versionFlag = command === 'ffmpeg' ? '-version' : '--version';
-    
-    const process = spawn(command, [versionFlag], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stderr = '';
-
-    process.stderr?.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    process.on('error', (error) => {
-      reject(new StartupValidationError(`Failed to start ${command}: ${error.message}`));
-    });
-
-    process.on('close', (code) => {
-      if (code === 0) {
-        logger.info({ command }, `Dependency check passed: ${command} is available`);
-        resolve();
-      } else {
-        reject(new StartupValidationError(
-          `${command} is not installed or not working correctly${stderr ? `: ${stderr.trim()}` : ''}`
-        ));
-      }
-    });
-  });
 }
 
 export async function validateStartupRequirements(): Promise<void> {
@@ -58,23 +24,6 @@ export async function validateStartupRequirements(): Promise<void> {
           throw new StartupValidationError('DISCORD_TOKEN appears to be invalid (too short)');
         }
         logger.info('DISCORD_TOKEN validation passed');
-      }
-    },
-    {
-      name: 'YTDLP_COOKIES_PATH',
-      check: async () => {
-        const cookiesPath = process.env.YTDLP_COOKIES_PATH;
-        if (!cookiesPath || cookiesPath.trim() === '') {
-          throw new StartupValidationError('YTDLP_COOKIES_PATH environment variable is required and cannot be empty');
-        }
-        
-        try {
-          const { readFile } = await import('node:fs/promises');
-          await readFile(cookiesPath, 'utf-8');
-          logger.info({ cookiesPath }, 'YTDLP_COOKIES_PATH validation passed');
-        } catch (error) {
-          throw new StartupValidationError(`Cookies file not found or not readable at: ${cookiesPath}`);
-        }
       }
     },
     {
@@ -100,14 +49,6 @@ export async function validateStartupRequirements(): Promise<void> {
         }
         logger.info('LAVALINK_PORT validation passed');
       }
-    },
-    {
-      name: 'yt-dlp',
-      check: () => checkCommandExists('yt-dlp')
-    },
-    {
-      name: 'ffmpeg',
-      check: () => checkCommandExists('ffmpeg')
     }
   ];
 
@@ -131,21 +72,12 @@ function getUserFriendlyErrorMessage(dependency: string, technicalError: string)
     case 'DISCORD_TOKEN':
       return '❌ **Discord Token Missing**: Please set the DISCORD_TOKEN environment variable with a valid bot token. You can get this from the Discord Developer Portal.';
     
-    case 'YTDLP_COOKIES_PATH':
-      return '❌ **YouTube Cookies Missing**: Please set the YTDLP_COOKIES_PATH environment variable pointing to a valid cookies.txt file. This is required for accessing YouTube content.';
-    
     case 'LAVALINK_PASSWORD':
       return '❌ **Lavalink Password Missing**: Please set the LAVALINK_PASSWORD environment variable. It must match the password configured on the Lavalink node (lavalink/application.yml).';
 
     case 'LAVALINK_PORT':
       return `❌ **Lavalink Port Invalid**: ${technicalError}`;
 
-    case 'yt-dlp':
-      return '❌ **yt-dlp Not Found**: Please install yt-dlp to download audio from YouTube. Run: `pip install yt-dlp` or visit https://github.com/yt-dlp/yt-dlp for installation instructions.';
-    
-    case 'ffmpeg':
-      return '❌ **FFmpeg Not Found**: Please install FFmpeg to process audio files. Run: `sudo apt install ffmpeg` (Ubuntu/Debian) or visit https://ffmpeg.org/download.html for other platforms.';
-    
     default:
       return `❌ **${dependency} Error**: ${technicalError}`;
   }

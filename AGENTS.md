@@ -1,12 +1,13 @@
 # Project Agent Instructions
 
 You are working inside Raeon: a standalone Discord music bot written in
-TypeScript (ESM) on discord.js v14 + @discordjs/voice. Audio comes from a
-spawned `yt-dlp` process piped through a spawned `ffmpeg` process into the
-Discord voice connection. An optional PostgreSQL sink mirrors structured
-logs. Raeon is **not** related to LazyScan or its detached services
-(Kiln/Herald/Aegis) — sibling repos under `../` are convention precedent
-only, never runtime dependencies.
+TypeScript (ESM) on discord.js v14. Audio is resolved and streamed by a
+Lavalink v4 node (Docker) driven through Shoukaku; the bot keeps queueing,
+command UX, and Discord session state — it ships no audio bytes itself.
+An optional PostgreSQL sink mirrors structured logs. Raeon is **not**
+related to LazyScan or its detached services (Kiln/Herald/Aegis) — sibling
+repos under `../` are convention precedent only, never runtime
+dependencies.
 
 Your primary role is:
 
@@ -42,16 +43,17 @@ over:
 * **No web framework.** Raeon has no HTTP server. Health/metrics endpoints
   do not exist yet; do not add one without approval
   (`docs/wiki/nice-to-have.md` tracks the idea).
-* **External binaries, not libraries.** Audio extraction and encoding are
-  child processes (`yt-dlp`, `ffmpeg`) validated at startup by
-  `src/infrastructure/startup-validator.ts`. Do not swap these for
-  JS-native extractors without approval.
+* **Lavalink node, not local audio.** Track resolution and streaming
+  happen on the Lavalink node (`lavalink/application.yml`, compose
+  service). The bot talks to it only through Shoukaku in
+  `src/infrastructure/lavalink.ts`. Do not reintroduce local
+  extraction/encoding without approval.
 * **Domain layer stays dependency-free.** `src/domain/` defines the
-  `AudioExtractor` / `AudioEncoder` / `VoiceGateway` interfaces and the
-  `GuildPlayer` state machine. discord.js types must not leak into it.
-* **Secrets never enter git.** `.env`, `cookies.txt` are gitignored. The
-  YouTube cookies file is required at boot and must never be committed or
-  logged.
+  `PlayerPort` interface, the `Track` model, and the `GuildPlayer`
+  queue orchestrator. discord.js and shoukaku types must not leak into
+  it.
+* **Secrets never enter git.** `.env` is gitignored; `DISCORD_TOKEN`
+  and `LAVALINK_PASSWORD` must never be committed or logged.
 * **PostgreSQL is a log sink only.** No business data lives in the
   database. The `logs` table is auto-created at boot; there is no
   migration system. Do not add business tables without approval.
@@ -149,10 +151,11 @@ Before non-trivial implementation:
 5. identify rollback risk
 6. prefer smallest safe implementation
 
-The hidden contracts here are the playback abort chain (AbortController →
-SIGTERM to yt-dlp/ffmpeg → voice player Idle event resolves `play()`),
-the `GuildPlayer` state machine (IDLE/PLAYING/PAUSED/STOPPING), and the
-`(global as any).client` handle that `VoiceGateway` reads. See
+The hidden contracts here are the track-`end` event driving queue
+auto-advance in `GuildPlayer` (exceptions ride the `end(loadFailed)`
+that follows; `stuck` force-stops because no `end` follows), the
+`PlayerPort` boundary keeping shoukaku types out of the domain, and
+Shoukaku players being keyed per guild. See
 `docs/wiki/architecture.md` and `docs/wiki/known-constraints.md`.
 
 ---
@@ -161,12 +164,12 @@ the `GuildPlayer` state machine (IDLE/PLAYING/PAUSED/STOPPING), and the
 
 Do NOT modify unless explicitly required:
 
-* the `AudioExtractor` / `AudioEncoder` / `VoiceGateway` interfaces in
-  `src/domain/audio.ts`
-* the playback abort/cleanup chain or `GuildPlayer` state transitions
-* environment variable names (`DISCORD_TOKEN`, `YTDLP_COOKIES_PATH`,
-  `DATABASE_URL`, `DEV_GUILD_ID`, `CLEAR_GUILDS`, `LOG_LEVEL`, `NODE_ENV`)
-* the startup validation set (token, cookies file, yt-dlp, ffmpeg)
+* the `PlayerPort` interface in `src/domain/guild-player.ts`
+* the track-`end` auto-advance chain or `GuildPlayer` state transitions
+* environment variable names (`DISCORD_TOKEN`, `LAVALINK_HOST`,
+  `LAVALINK_PORT`, `LAVALINK_PASSWORD`, `DATABASE_URL`, `DEV_GUILD_ID`,
+  `CLEAR_GUILDS`, `LOG_LEVEL`, `NODE_ENV`)
+* the startup validation set (token, Lavalink password/port)
 * graceful-shutdown ordering in `src/main.ts` (intervals → music service →
   Discord client → database logger)
 

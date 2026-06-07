@@ -5,8 +5,7 @@
 ## Prerequisites
 
 - Node.js 24+
-- yt-dlp installed system-wide
-- ffmpeg installed system-wide
+- Docker (runs the Lavalink audio node)
 
 ## Setup
 
@@ -28,17 +27,23 @@
 
    ```bash
    DISCORD_TOKEN=your_bot_token_here
-   YTDLP_COOKIES_PATH=/path/to/your/cookies.txt
+   LAVALINK_PASSWORD=shared_with_the_lavalink_node
    DATABASE_URL=postgresql://user:password@localhost:5432/raeon
    ```
 
-4. Build the project:
+4. Start the Lavalink node:
+
+   ```bash
+   docker compose up -d lavalink
+   ```
+
+5. Build the project:
 
    ```bash
    npm run build
    ```
 
-5. Run the bot:
+6. Run the bot:
 
    ```bash
    npm start
@@ -56,6 +61,7 @@
 
    ```bash
    DISCORD_TOKEN=your_bot_token_here
+   LAVALINK_PASSWORD=shared_with_the_lavalink_node
    DATABASE_URL=postgresql://raeon:password@postgres:5432/raeon
    ```
 
