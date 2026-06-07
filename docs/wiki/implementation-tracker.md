@@ -34,11 +34,11 @@ Status legend:
 | Config / startup validation | done | dotenv + hard checks: token length, cookies file readable, yt-dlp + ffmpeg on PATH; friendly failure messages. | — |
 | Slash commands (14) | done | ping, play, stop, skip, queue, clear, commands, search, nowplaying, pause, resume, shuffle, remove, prune. Dispatch via `handler/slash.ts`. | Behavior caveats in `known-constraints.md` (skip, resume). |
 | Command registration | done | Global sync by default; dev-guild sync with `NODE_ENV=development` + `DEV_GUILD_ID`; `CLEAR_GUILDS` cleanup flag. | — |
-| Audio pipeline | partial | Lavalink cutover (L2): `GuildPlayer` orchestrates a Shoukaku player via the domain `PlayerPort`; track-end auto-advance (F-6 fixed), native pause/resume (position kept), no track ceiling (F-7 fixed); queue cap 20. yt-dlp/ffmpeg files remain but only `/search` + ytsearch use the extractor until L3. Live smoke pending. | `lavalink-plan.md`. |
+| Audio pipeline | partial | Lavalink cutover (L2): `GuildPlayer` orchestrates a Shoukaku player via the domain `PlayerPort`; track-end auto-advance (F-6 fixed), native pause/resume (position kept), no track ceiling (F-7 fixed); queue cap 20. yt-dlp/ffmpeg files remain on disk but nothing references them after L3 (deleted at L4). Live smoke pending. | `lavalink-plan.md`. |
 | Multi-guild playback | partial | Shoukaku players are keyed per guild — the "first live connection" routing bug is structurally gone (L2). Concurrent two-guild playback not yet live-verified. | `lavalink-plan.md` L2 exit. |
-| Search | done | `/search` (1–20 results, dump-single-json) and `/play ytsearchN:query` resolve to first result. | — |
+| Search | done | `/search` and `/play ytsearchN:query` resolve through Lavalink REST (`ytsearch:`); the legacy N-count syntax is accepted and normalized (L3). | — |
 | Idle timeout | done | 5-min inactivity → disconnect + embed notification to last text channel; 30s sweep. | — |
-| Presence | done | 30s rotation: current track title (yt-dlp --get-title) or server/channel stats. | Subprocess-per-refresh cost noted in `known-constraints.md`. |
+| Presence | done | 30s rotation: current `Track.title` from resolve-time metadata (L3 — subprocess churn gone) or server/channel stats. | — |
 | Logging / metrics | partial | pino + optional fire-and-forget Postgres mirror; in-memory counters logged every 5 min. `cleanupOldLogs`, `getMetrics`, `logWithContext` are dead code. | Log retention + dead-code cleanup in `nice-to-have.md`. |
 | Database | partial | `logs` table auto-created at boot; no migrations; no business data. | Unbounded growth — `nice-to-have.md`. |
 | Message/reaction handlers | reserved | Events wired, handlers are no-op stubs. | Define a use case first. |

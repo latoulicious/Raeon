@@ -33,14 +33,8 @@ async function execute(
   try {
     logger.debug({ query, limit, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Executing search command');
 
-    // Get the extractor from the music service
-    const extractor = services.music.getExtractor();
-    if (!extractor || typeof (extractor as any).search !== 'function') {
-      await interaction.followUp('Search functionality is not available.');
-      return;
-    }
-
-    const results = await (extractor as any).search(query, limit);
+    const result = await services.music.resolve(`ytsearch:${query}`);
+    const results = result.kind === 'search' ? result.tracks.slice(0, limit) : [];
 
     if (results.length === 0) {
       const embed = EmbedService.createErrorEmbed('Search', `No results found for "${query}"`, interaction.user);

@@ -40,43 +40,51 @@ async function execute(
   const textChannelId = interaction.channelId;
 
   try {
-    // Handle search queries (ytsearch format)
-    let finalUrl = url;
-    if (url.startsWith('ytsearch')) {
-      // This is a search query, get the first result
-      const extractor = services.music.getExtractor();
-      if (!extractor || typeof (extractor as any).search !== 'function') {
-        await interaction.followUp('Search functionality is not available.');
-        return;
-      }
-
-      // Extract search query from ytsearch format
-      const searchMatch = url.match(/ytsearch(\d+):(.+)/);
-      if (!searchMatch) {
-        await interaction.followUp('Invalid search format. Use: ytsearch10:your query');
-        return;
-      }
-
-      const [, limit, query] = searchMatch;
-      const results = await (extractor as any).search(query, parseInt(limit || '10'));
-      
-      if (results.length === 0) {
-        await interaction.followUp('No results found for your search query.');
-        return;
-      }
-
-      // Use the first search result
-      finalUrl = results[0].url;
-      logger.debug({ originalQuery: url, finalUrl, resultCount: results.length }, 'Resolved search query to URL');
+    // Keep the old yt-dlp ytsearchN: syntax working; Lavalink only knows
+    // the unnumbered ytsearch: prefix and /play takes the first hit anyway.
+    let identifier = url;
+    const searchMatch = url.match(/^ytsearch(\d*):(.+)$/);
+    if (searchMatch) {
+      identifier = `ytsearch:${searchMatch[2]}`;
     }
 
-    await services.music.play(guildId, voiceChannelId, textChannelId, finalUrl);
+    const result = await services.music.resolve(identifier);
+
+    let track;
+    let playlistNotice: string | null = null;
+    switch (result.kind) {
+      case 'track':
+        track = result.track;
+        break;
+      case 'search':
+        track = result.tracks[0];
+        break;
+      case 'playlist':
+        track = result.track;
+        playlistNotice = `Playlist "${result.playlistName}" detected (${result.totalTracks} tracks) — queued the linked track only. Playlists are not supported yet.`;
+        break;
+      case 'empty':
+        break;
+    }
+
+    if (!track) {
+      const embed = EmbedService.createErrorEmbed('Play', 'No playable track was found for that URL or query.', interaction.user);
+      await interaction.followUp({ embeds: [embed] });
+      return;
+    }
+
+    await services.music.play(guildId, voiceChannelId, textChannelId, track);
     const queue = services.music.getQueue(guildId);
-    
-    const embed = EmbedService.createPlayEmbed(finalUrl, queue.length, interaction.user, interaction.client);
-    
-    logger.info({ guildId, url: finalUrl, userId: interaction.user.id, commandName: 'play' }, 'Play command executed successfully');
+
+    const embed = EmbedService.createPlayEmbed(track, queue.length, interaction.user, interaction.client);
+
+    logger.info({ guildId, title: track.title, uri: track.uri, userId: interaction.user.id, commandName: 'play' }, 'Play command executed successfully');
     await interaction.followUp({ embeds: [embed] });
+
+    if (playlistNotice) {
+      const noticeEmbed = EmbedService.createInfoEmbed('Playlist', playlistNotice, interaction.user);
+      await interaction.followUp({ embeds: [noticeEmbed] });
+    }
   } catch (error) {
     logger.error({ guildId, url, error, userId: interaction.user.id, commandName: 'play' }, 'Error playing music');
     

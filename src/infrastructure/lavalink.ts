@@ -2,7 +2,7 @@ import { Client } from 'discord.js';
 import { Connectors, LoadType, Shoukaku } from 'shoukaku';
 import type { Player, Track as ShoukakuTrack } from 'shoukaku';
 import type { PlayerPort, TrackEndReason } from '../domain/guild-player.js';
-import type { Track } from '../domain/track.js';
+import type { ResolveResult, Track } from '../domain/track.js';
 import { appLogger } from './logger.js';
 
 const logger = appLogger.getLogger('lavalink');
@@ -107,12 +107,8 @@ export class LavalinkClient {
     logger.info({ guildId }, 'Left voice channel');
   }
 
-  /**
-   * Resolve a URL or `ytsearch:` identifier to the first playable track.
-   * Returns null when nothing matches. The full loadType handling (playlist
-   * notices, search lists) moves into the commands at L3.
-   */
-  async resolveTrack(identifier: string): Promise<Track | null> {
+  /** Resolve a URL or `ytsearch:` identifier against the node's REST API. */
+  async resolve(identifier: string): Promise<ResolveResult> {
     const node = this.shoukaku.getIdealNode();
     if (!node) {
       throw new LavalinkError('No Lavalink node is connected');
@@ -120,21 +116,40 @@ export class LavalinkClient {
 
     const result = await node.rest.resolve(identifier);
     if (!result) {
-      return null;
+      return { kind: 'empty' };
     }
 
     switch (result.loadType) {
       case LoadType.TRACK:
-        return toDomainTrack(result.data);
+        return { kind: 'track', track: toDomainTrack(result.data) };
       case LoadType.SEARCH:
-        return result.data[0] ? toDomainTrack(result.data[0]) : null;
-      case LoadType.PLAYLIST:
-        return result.data.tracks[0] ? toDomainTrack(result.data.tracks[0]) : null;
+        return { kind: 'search', tracks: result.data.map(toDomainTrack) };
+      case LoadType.PLAYLIST: {
+        // A watch URL with a &list= param resolves as a playlist. Prefer, in
+        // order: selectedTrack (set when the URL has index=), the track whose
+        // id matches the v= param (matches the old --no-playlist behavior),
+        // then the playlist head.
+        const selected = result.data.info.selectedTrack;
+        const linkedVideoId = identifier.match(/[?&]v=([^&]+)/)?.[1];
+        const track =
+          (selected >= 0 ? result.data.tracks[selected] : undefined) ??
+          (linkedVideoId ? result.data.tracks.find(t => t.info.identifier === linkedVideoId) : undefined) ??
+          result.data.tracks[0];
+        if (!track) {
+          return { kind: 'empty' };
+        }
+        return {
+          kind: 'playlist',
+          track: toDomainTrack(track),
+          playlistName: result.data.info.name,
+          totalTracks: result.data.tracks.length,
+        };
+      }
       case LoadType.ERROR:
         throw new LavalinkError(`Track load failed: ${result.data.message ?? 'unknown error'}`);
       case LoadType.EMPTY:
       default:
-        return null;
+        return { kind: 'empty' };
     }
   }
 

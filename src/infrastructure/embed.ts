@@ -1,4 +1,5 @@
 import { EmbedBuilder, User, Client, ColorResolvable } from 'discord.js';
+import type { Track } from '../domain/track.js';
 
 export class EmbedService {
   private static readonly COLORS = {
@@ -40,29 +41,29 @@ export class EmbedService {
   }
 
   static createNowPlayingEmbed(
-    trackUrl: string,
+    track: Track,
     isPaused: boolean,
     queueLength: number,
     user: User,
     client: Client
   ): EmbedBuilder {
-    const videoId = this.extractVideoId(trackUrl);
+    const videoId = this.extractVideoId(track.uri);
     const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
 
     const embed = this.createMusicEmbed('Now Playing', client)
-      .setDescription(isPaused ? 'Currently Paused' : 'Currently Streaming')
+      .setDescription(`**[${track.title}](${track.uri})**\nby ${track.author}`)
       .setColor(isPaused ? this.COLORS.PAUSED : this.COLORS.PLAYING)
-      .setURL(trackUrl)
+      .setURL(track.uri)
       .addFields(
         {
-          name: 'URL',
-          value: `[Click to open](${trackUrl})`,
-          inline: false
+          name: 'Duration',
+          value: this.formatTrackDuration(track),
+          inline: true
         },
         {
           name: 'Queue Status',
-          value: queueLength > 0 
-            ? `${queueLength} song${queueLength === 1 ? '' : 's'} waiting` 
+          value: queueLength > 0
+            ? `${queueLength} song${queueLength === 1 ? '' : 's'} waiting`
             : 'Queue is empty',
           inline: true
         },
@@ -72,7 +73,7 @@ export class EmbedService {
           inline: true
         }
       )
-      .setFooter({ 
+      .setFooter({
         text: `Requested by ${user.tag}`,
         iconURL: user.displayAvatarURL()
       });
@@ -85,34 +86,32 @@ export class EmbedService {
   }
 
   static createQueueEmbed(
-    queue: readonly string[],
-    currentTrack: string | null,
+    queue: readonly Track[],
+    currentTrack: Track | null,
     isPaused: boolean,
     isPlaying: boolean,
     client: Client
   ): EmbedBuilder {
     const embed = this.createMusicEmbed('Music Queue', client);
 
-    if (isPlaying || isPaused) {
-      const videoId = currentTrack ? this.extractVideoId(currentTrack) : null;
+    if ((isPlaying || isPaused) && currentTrack) {
+      const videoId = this.extractVideoId(currentTrack.uri);
       const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-      
-      embed.addFields({ 
-        name: 'Now Playing', 
-        value: `${isPaused ? '⏸️ Currently Paused' : '▶️ Currently Streaming'}\n[Open in YouTube](${currentTrack || '#'})`,
-        inline: false 
+
+      embed.addFields({
+        name: 'Now Playing',
+        value: `${isPaused ? '⏸️ Currently Paused' : '▶️ Currently Streaming'}\n[${currentTrack.title}](${currentTrack.uri}) — ${currentTrack.author} (${this.formatTrackDuration(currentTrack)})`,
+        inline: false
       });
-      
+
       if (thumbnailUrl) {
         embed.setThumbnail(thumbnailUrl);
       }
     }
 
     if (queue.length > 0) {
-      const queueList = queue.slice(0, 10).map((url, index) => {
-        const videoId = this.extractVideoId(url);
-        const shortUrl = videoId ? `https://youtu.be/${videoId}` : url;
-        return `${index + 1}. [Open](${shortUrl})`;
+      const queueList = queue.slice(0, 10).map((track, index) => {
+        return `${index + 1}. [${track.title}](${track.uri}) — ${track.author} (${this.formatTrackDuration(track)})`;
       }).join('\n');
 
       embed.addFields({ 
@@ -188,20 +187,21 @@ export class EmbedService {
   }
 
   static createPlayEmbed(
-    trackUrl: string,
+    track: Track,
     queueLength: number,
     user: User,
     client: Client
   ): EmbedBuilder {
-    const videoId = this.extractVideoId(trackUrl);
+    const videoId = this.extractVideoId(track.uri);
     const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
+    const trackLine = `[${track.title}](${track.uri}) — ${track.author} (${this.formatTrackDuration(track)})`;
 
-    const description = queueLength === 0 
-      ? `▶️ **Now playing**\n[Open in YouTube](${trackUrl})`
-      : `✅ **Song added to queue!**\n📋 Queue: ${queueLength} song${queueLength === 1 ? '' : 's'} remaining\n⏭️ Next up: [Open](${trackUrl})`;
+    const description = queueLength === 0
+      ? `▶️ **Now playing**\n${trackLine}`
+      : `✅ **Song added to queue!**\n📋 Queue: ${queueLength} song${queueLength === 1 ? '' : 's'} remaining\n⏭️ Added: ${trackLine}`;
 
     const embed = this.createSuccessEmbed('Music Player', description, user)
-      .setURL(trackUrl);
+      .setURL(track.uri);
 
     if (thumbnailUrl) {
       embed.setThumbnail(thumbnailUrl);
@@ -218,14 +218,16 @@ export class EmbedService {
     return this.createSuccessEmbed('Skip', description, user);
   }
 
-  static createPauseEmbed(currentTrack: string | null, user: User): EmbedBuilder {
-    const description = `⏸️ **Playback has been paused**\n[Currently playing](${currentTrack || '#'})`;
+  static createPauseEmbed(currentTrack: Track | null, user: User): EmbedBuilder {
+    const trackLine = currentTrack ? `[${currentTrack.title}](${currentTrack.uri})` : 'Current track';
+    const description = `⏸️ **Playback has been paused**\n${trackLine}`;
     return this.createSuccessEmbed('Paused', description, user)
       .setColor(this.COLORS.PAUSED);
   }
 
-  static createResumeEmbed(currentTrack: string | null, queueLength: number, user: User): EmbedBuilder {
-    const description = `▶️ **Playback has been resumed**\n[Now playing](${currentTrack || '#'})`;
+  static createResumeEmbed(currentTrack: Track | null, queueLength: number, user: User): EmbedBuilder {
+    const trackLine = currentTrack ? `[${currentTrack.title}](${currentTrack.uri})` : 'Current track';
+    const description = `▶️ **Playback has been resumed**\n${trackLine}`;
     const embed = this.createSuccessEmbed('Resumed', description, user)
       .setColor(this.COLORS.PLAYING);
 
@@ -248,16 +250,13 @@ export class EmbedService {
     return this.createSuccessEmbed('Queue Cleared', `Cleared ${count} song${count === 1 ? '' : 's'} from the queue.`, user);
   }
 
-  static createRemoveEmbed(position: number, songUrl: string, newQueueSize: number, user: User): EmbedBuilder {
-    const videoId = this.extractVideoId(songUrl);
-    const shortUrl = videoId ? `https://youtu.be/${videoId}` : songUrl;
-    
+  static createRemoveEmbed(position: number, track: Track, newQueueSize: number, user: User): EmbedBuilder {
     return this.createSuccessEmbed('Removed', `Song removed from queue`, user)
       .setColor('#E74C3C')
       .addFields(
         {
           name: 'Removed Song',
-          value: `Position ${position}: [Open](${shortUrl})`,
+          value: `Position ${position}: [${track.title}](${track.uri})`,
           inline: false
         },
         {
@@ -278,23 +277,21 @@ export class EmbedService {
       });
   }
 
-  static createSearchEmbed(query: string, results: any[], limit: number, client: Client): EmbedBuilder {
+  static createSearchEmbed(query: string, results: readonly Track[], limit: number, client: Client): EmbedBuilder {
     const embed = this.createBaseEmbed(`Search Results for "${query}"`, '#FF0000')
       .setDescription(`Found ${results.length} result${results.length === 1 ? '' : 's'} for your search`)
-      .setFooter({ 
-        text: `Use /play with the URL or try /play ytsearch1:"song name" for direct search • Results: ${results.length}/${limit}` 
+      .setFooter({
+        text: `Use /play with the URL or try /play ytsearch1:"song name" for direct search • Results: ${results.length}/${limit}`
       });
 
     if (client.user) {
       embed.setThumbnail(client.user.displayAvatarURL());
     }
 
-    results.forEach((result, index) => {
-      const duration = typeof result.duration === 'number' ? this.formatDuration(result.duration) : result.duration;
-      
+    results.forEach((track, index) => {
       embed.addFields({
-        name: `${index + 1}. ${result.title}`,
-        value: `**${result.uploader}** | **${duration}**\n[Click to play](${result.url})\n\`/play ${result.url}\``,
+        name: `${index + 1}. ${track.title}`,
+        value: `**${track.author}** | **${this.formatTrackDuration(track)}**\n[Click to play](${track.uri})\n\`/play ${track.uri}\``,
         inline: false
       });
     });
@@ -369,6 +366,14 @@ export class EmbedService {
     });
 
     return embed;
+  }
+
+  /** Track.duration is in milliseconds; live streams report no usable length. */
+  private static formatTrackDuration(track: Track): string {
+    if (track.duration <= 0) {
+      return 'live/unknown';
+    }
+    return this.formatDuration(Math.floor(track.duration / 1000));
   }
 
   private static formatDuration(seconds: number): string {

@@ -7,3 +7,10 @@ export interface Track {
   duration: number;
   uri: string;
 }
+
+/** Outcome of resolving a URL or search identifier against Lavalink. */
+export type ResolveResult =
+  | { kind: 'track'; track: Track }
+  | { kind: 'playlist'; track: Track; playlistName: string; totalTracks: number }
+  | { kind: 'search'; tracks: Track[] }
+  | { kind: 'empty' };

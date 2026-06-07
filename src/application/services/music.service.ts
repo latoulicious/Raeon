@@ -1,8 +1,6 @@
-import type { AudioExtractor } from '../../domain/audio.js';
 import { GuildPlayer, GuildPlayerError } from '../../domain/guild-player.js';
-import type { Track } from '../../domain/track.js';
+import type { ResolveResult, Track } from '../../domain/track.js';
 import { LavalinkClient, LavalinkError } from '../../infrastructure/lavalink.js';
-import { YtdlpExtractorError } from '../../infrastructure/yt-dlp.js';
 import { appLogger } from '../../infrastructure/logger.js';
 import { TimeoutService } from '../../infrastructure/timeout.js';
 
@@ -24,7 +22,6 @@ export class MusicService {
 
   constructor(
     private readonly lavalink: LavalinkClient,
-    private readonly extractor: AudioExtractor,
     private readonly onTimeoutNotification?: TimeoutNotificationCallback,
   ) {
     this.timeoutService = new TimeoutService(async (guildId) => {
@@ -52,13 +49,16 @@ export class MusicService {
     this.timeoutService.startMonitoring();
   }
 
-  // Used by the /search and /play ytsearch paths only; replaced by
-  // Lavalink REST resolution in the commands at L3.
-  getExtractor(): AudioExtractor {
-    return this.extractor;
+  /** Resolve a URL or `ytsearch:` identifier; errors map to user-friendly messages. */
+  async resolve(identifier: string): Promise<ResolveResult> {
+    try {
+      return await this.lavalink.resolve(identifier);
+    } catch (error) {
+      throw this.handleServiceError(error);
+    }
   }
 
-  async play(guildId: string, voiceChannelId: string, textChannelId: string, url: string): Promise<void> {
+  async play(guildId: string, voiceChannelId: string, textChannelId: string, track: Track): Promise<void> {
     try {
       this.timeoutService.updateActivity(guildId);
       this.lastTextChannelIds.set(guildId, textChannelId);
@@ -71,14 +71,6 @@ export class MusicService {
         throw new MusicServiceError(
           'Queue is full',
           `🎵 **Queue Full**: The queue has reached its maximum limit of ${maxQueueSize} songs. Use /clear to remove all songs or wait for some to finish playing.`
-        );
-      }
-
-      const track = await this.lavalink.resolveTrack(url);
-      if (!track) {
-        throw new MusicServiceError(
-          'No track found',
-          '🎵 **Nothing Found**: No playable track was found for that URL or query. Please check it and try again.'
         );
       }
 
@@ -161,11 +153,9 @@ export class MusicService {
     }
   }
 
-  // String (uri) surface preserved for the embeds/presence until L3
-  // switches them to Track metadata.
-  getQueue(guildId: string): readonly string[] {
+  getQueue(guildId: string): readonly Track[] {
     const player = this.players.get(guildId);
-    return player?.getQueue().map(track => track.uri) ?? [];
+    return player?.getQueue() ?? [];
   }
 
   isPlaying(guildId: string): boolean {
@@ -204,21 +194,21 @@ export class MusicService {
     }
   }
 
-  remove(guildId: string, position: number): string | null {
+  remove(guildId: string, position: number): Track | null {
     this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
-    return player?.remove(position)?.uri ?? null;
+    return player?.remove(position) ?? null;
   }
 
-  getCurrentTrack(guildId: string): string | null {
+  getCurrentTrack(guildId: string): Track | null {
     const player = this.players.get(guildId);
-    return player?.getCurrentTrack()?.uri ?? null;
+    return player?.getCurrentTrack() ?? null;
   }
 
-  getAnyPlayingTrack(): string | null {
+  getAnyPlayingTrack(): Track | null {
     for (const player of this.players.values()) {
       if (player.getIsPlaying()) {
-        return player.getCurrentTrack()?.uri ?? null;
+        return player.getCurrentTrack();
       }
     }
     return null;
@@ -232,18 +222,6 @@ export class MusicService {
   private handleServiceError(error: unknown): MusicServiceError {
     if (error instanceof MusicServiceError) {
       return error;
-    }
-
-    if (error instanceof YtdlpExtractorError) {
-      return new MusicServiceError(
-        'yt-dlp extraction failed',
-        '🎵 **Download Failed**: Unable to download the audio from the provided URL. This could be due to:\n' +
-        '• The video is private or unavailable\n' +
-        '• YouTube is blocking access (try again later)\n' +
-        '• The URL is invalid or not supported\n' +
-        'Please check the URL and try again.',
-        error
-      );
     }
 
     if (error instanceof LavalinkError) {
