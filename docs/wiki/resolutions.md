@@ -76,5 +76,15 @@ findings are unapproved in [nice-to-have.md](nice-to-have.md).
   `@discordjs/opus` chain (and its `tar` advisories) was dropped;
   `npm audit` reports 0 vulnerabilities.
 
+## 2026-06-07 — UX refresh
+
+- **F-13** resolved (`71af53c`) — track lists are built by
+  `EmbedService.formatTrackList`, char-budgeted against Discord's
+  limits (field value 1024 for `/queue`, description 4096 for
+  `/search`), with titles/authors truncated in the shared
+  `formatTrackLine`. Hidden entries surface as "...and N more" in the
+  footer. Verified by build + rebuilt image; live `/queue` re-check is
+  on the smoke checklist.
+
 Open: **F-8 only** (dead logging code / no retention — candidate work
 in [nice-to-have.md](nice-to-have.md)).

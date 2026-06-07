@@ -43,3 +43,17 @@ L2 `0bdc948`, L3 `ed37dd4`, L4 `170bfdd`, L5 `7ee87aa`, L6 docs sync.
 Closed F-1..F-4, F-6, F-7, F-9, F-10 (see resolutions.md); F-8 is the
 only open finding. E2e verified in-stack; the per-command smoke
 checklist lives in implementation-tracker.md.
+
+## Embed UX refresh U0–U3 (approved 2026-06-07)
+
+[ux-refresh-plan.md](ux-refresh-plan.md) — palette + single-icon design
+system, per-command embed refresh, error-path hardening (ephemeral guard
+embeds, deduped handler fallback, plain error copy, throttled
+playback-failure notify). Presentation and error-reply scope only.
+Discord-native palette chosen at approval.
+
+Progress: **shipped 2026-06-07** — U0 `3f86f9e`, U1 `7a8acab`,
+F-13 fix `71af53c`, U2 `d407f51`, U3 docs sync. Closed F-13
+(user-reported `/queue` overflow found mid-implementation). Live
+screenshot pass + smoke additions tracked in
+implementation-tracker.md.

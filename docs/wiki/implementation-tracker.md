@@ -33,6 +33,7 @@ Status legend:
 | Bootstrap / shutdown | done | Composition root in `main.ts`; graceful shutdown on SIGINT/SIGTERM/unhandled errors with 10s force-exit; cleanup order: intervals → music → client → DB pool. | — |
 | Config / startup validation | done | dotenv + hard checks: token length, `LAVALINK_PASSWORD` non-empty, `LAVALINK_PORT` range; friendly failure messages. No binaries, no cookies (L4). | — |
 | Slash commands (14) | done | ping, play, stop, skip, queue, clear, commands, search, nowplaying, pause, resume, shuffle, remove, prune. Dispatch via `handler/slash.ts`. | — |
+| Embed/error UX | done | UX refresh U0–U2 (2026-06-07): single palette + single-icon policy in `EmbedService`, shared track-line/list formatters char-budgeted to Discord limits (F-13), pre-defer ephemeral guard embeds, deduped handler fallback, plain `userFriendlyMessage`, throttled playback-failure channel notify. Live smoke pending (checklist below). | — |
 | Command registration | done | Global sync by default; dev-guild sync with `NODE_ENV=development` + `DEV_GUILD_ID`; `CLEAR_GUILDS` cleanup flag. | — |
 | Audio pipeline | done | Lavalink end-to-end (L2–L4): `GuildPlayer` orchestrates a Shoukaku player via the domain `PlayerPort`; track-end auto-advance (F-6), native pause/resume (position kept), no track ceiling (F-7); queue cap 20. Legacy yt-dlp/ffmpeg code and deps deleted. E2e boot + playback user-verified in-stack 2026-06-07; per-command smoke checklist below. | — |
 | Multi-guild playback | partial | Shoukaku players are keyed per guild — the "first live connection" routing bug is structurally gone (L2). Concurrent two-guild playback not yet live-verified (smoke checklist). | — |
@@ -56,7 +57,18 @@ unchecked per-command, in Discord:
 - [ ] `/play <url>` and `/play <bare query>` (ytsearch)
 - [ ] `/pause` → `/resume` keeps position
 - [ ] `/skip` auto-advances to the next queued track
-- [ ] `/queue` shows title/author/duration metadata
-- [ ] playlist URL queues the linked track + info notice
+- [ ] `/queue` shows title/author/duration metadata (incl. a long
+      queue — F-13 clamp)
+- [ ] playlist URL queues the linked track + notice field on the same
+      play embed
 - [ ] idle disconnect after 5 min + timeout embed
 - [ ] concurrent playback in two guilds
+
+UX refresh (U3) additions:
+
+- [ ] screenshot pass over all 14 commands — no doubled icon, no
+      off-palette color
+- [ ] guard reply (e.g. `/play` outside a voice channel) is an
+      ephemeral error embed
+- [ ] a dead track posts one Playback Error embed and the queue
+      advances

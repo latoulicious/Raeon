@@ -72,3 +72,13 @@ fixes are recorded in [resolutions.md](resolutions.md) under the same ID.
   (critical) argued `end(loadFailed)` may not always follow `exception`
   and the queue could hang; suggested treating `exception` as terminal
   and advancing on it.
+
+## 2026-06-07 — UX refresh live smoke (user-reported)
+
+- **F-13** `/queue` failed live with the generic fallback ("There was
+  an error while executing this command!"); bot log shows
+  `"Received one or more errors"` (discord.js builder validation). The
+  queue embed packed up to 10 full track lines into a single field —
+  Discord caps field values at 1024 chars, so long titles overflowed
+  and embed validation threw. Same latent overflow in the `/search`
+  description (4096 cap, up to 20 results).

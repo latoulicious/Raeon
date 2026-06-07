@@ -79,6 +79,8 @@ Event contract (the hidden contract — see AGENTS.md):
 - `end(finished | loadFailed)` → auto-advance to the next queued track.
   Fatal exceptions are followed by `end(loadFailed)`, so exceptions ride
   the same path; non-fatal exceptions leave the track playing.
+  `loadFailed` (and a `stuck` force-stop) additionally fires the optional
+  `onTrackFailed` callback — notification only, never affects advance.
 - `end(stopped)` after `stop()` → `suppressAdvance` halts with the queue
   intact; after `skip()` → advances.
 - `stuck` → no `end` follows, so the orchestrator force-stops the track
@@ -102,6 +104,32 @@ pause, resume, shuffle, remove, prune` — wired in `main.ts` into a
 `ytsearchN:` count syntax is normalized). `/skip` advances via the end
 event; `/stop` disconnects. Embeds show `Track` metadata (title, author,
 duration) resolved at load time.
+
+### Embed and error conventions (UX refresh U0–U2, 2026-06-07)
+
+- **Palette** lives once in `EmbedService.COLORS` (ACCENT `#5865F2`,
+  SUCCESS `#57F287`, ERROR `#ED4245`, WARNING `#FEE75C`, INFO
+  `#3498DB`). No one-off hex codes in helpers.
+- **Status icons** are prefixed only by the
+  `createSuccessEmbed`/`createErrorEmbed`/`createInfoEmbed` helpers;
+  descriptions passed in never carry their own (the double-emoji bug
+  class is structurally dead).
+- **Track lines** come from the shared `formatTrackLine`
+  (`[title](uri) — author (duration)`, title/author truncated); track
+  lists go through `formatTrackList`, char-budgeted against Discord's
+  limits (field value 1024, description 4096) so long queues can't
+  break embed validation.
+- **Guard failures** (not-in-guild, no voice channel, wrong channel
+  type) reply *before* the defer as ephemeral error embeds
+  (`MessageFlags.Ephemeral`); the public defer happens only after
+  guards pass. The deprecated `ephemeral` option is not used.
+- **`MusicServiceError.userFriendlyMessage`** is a plain sentence — the
+  embed layer owns all presentation. Raw error messages never reach the
+  channel (logs only).
+- **Playback-failure notify**: `GuildPlayer.onTrackFailed` →
+  `MusicService.notifyTrackFailure` (throttled 30s per guild,
+  fire-and-forget) → `main.ts` sends an error embed to the guild's last
+  text channel. A dead channel cannot break queue advancement.
 
 Registration (`main.ts → CommandManager`):
 

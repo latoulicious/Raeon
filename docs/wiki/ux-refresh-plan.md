@@ -8,7 +8,7 @@ tags:
   - raeon
   - plan
 type: plan
-status: draft
+status: completed
 updated: 2026-06-07
 ---
 
@@ -126,6 +126,28 @@ playlist-notice message.
 - Wiki: architecture.md (embed/error conventions note),
   implementation-tracker.md rows, session log.
 - Exit: docs match; screenshot set captured.
+
+## Outcome (2026-06-07)
+
+Shipped same day: U0 `3f86f9e`, U1 `7a8acab`, U2 `d407f51`, U3 docs
+sync. Deviations from the plan as written:
+
+- **Guard mechanic.** The plan said "`MessageFlags.Ephemeral` on the
+  defer" — that would make success replies ephemeral too, and an
+  ephemeral followUp after a public defer leaves the public
+  "thinking…" placeholder dangling. Implemented instead: guards run
+  *before* the defer and reply as ephemeral error embeds; the public
+  defer happens only after guards pass.
+- **`/play` voice guard** now reads the cached voice state
+  (`guild.voiceStates.cache`, backed by the GuildVoiceStates intent)
+  instead of fetching the member — removes an awaited REST call from
+  the guard path (an ETIMEDOUT on that fetch was observed in the live
+  logs).
+- **F-13 found mid-implementation** (user-reported live): `/queue`
+  broke embed validation — 10 untruncated track lines exceeded the
+  1024-char field cap. Fixed in `71af53c` with char-budgeted
+  `formatTrackList` + title/author truncation; `/search` got the same
+  guard against its 4096 description cap.
 
 ## Non-goals
 
