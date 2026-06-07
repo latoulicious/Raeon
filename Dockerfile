@@ -1,49 +1,27 @@
-# Use Node.js 18 LTS as base image
-FROM node:18-alpine
+# Build stage: compile TypeScript, then prune to production deps
+FROM node:24-alpine AS builder
 
-# Install system dependencies needed for the Discord music bot
-RUN apk add --no-cache \
-    ffmpeg \
-    python3 \
-    py3-pip \
-    make \
-    g++ \
-    libgcc \
-    libstdc++ \
-    sqlite \
-    curl \
-    && pip3 install --no-cache-dir yt-dlp
-
-# Set working directory
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
+RUN npm ci
 
-# Install Node.js dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Copy source code
-COPY src/ ./src/
 COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npm run build && npm ci --omit=dev
 
-# Build the TypeScript application
-RUN npm run build
+# Runtime stage: dist + production node_modules only
+FROM node:24-alpine
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S botuser -u 1001
+ENV NODE_ENV=production
 
-# Change ownership of the app directory
-RUN chown -R botuser:nodejs /app
-USER botuser
+WORKDIR /app
 
-# Expose port (if needed for health checks or metrics)
-EXPOSE 3000
+# package.json must sit next to dist/ ("type": "module" drives ESM loading)
+COPY --chown=node:node package.json ./
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/dist ./dist
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node dist/main.js --health-check || exit 1
+USER node
 
-# Start the application
 CMD ["node", "dist/main.js"]

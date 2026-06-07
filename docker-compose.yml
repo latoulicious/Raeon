@@ -1,28 +1,23 @@
-version: '3.8'
-
 services:
   raeon-bot:
     build: .
     container_name: raeon-discord-bot
     restart: unless-stopped
     environment:
+      # In-stack values; these override host-dev settings from .env
       - NODE_ENV=production
       - LOG_LEVEL=info
+      - LAVALINK_HOST=lavalink
+      - DATABASE_URL=postgresql://raeon:${DB_PASSWORD}@postgres:5432/raeon
     env_file:
       - .env
     depends_on:
-      - postgres
+      lavalink:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     networks:
       - raeon-network
-    volumes:
-      # Mount cookies file if needed for yt-dlp
-      - ./cookies.txt:/app/cookies.txt:ro
-    healthcheck:
-      test: ["CMD", "node", "dist/main.js", "--health-check"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   lavalink:
     image: ghcr.io/lavalink-devs/lavalink:4
@@ -33,7 +28,7 @@ services:
     volumes:
       - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
     ports:
-      # Host-local only; the bot runs on the host until L5 moves it into compose
+      # Host-local only; lets a host-run dev bot reach the node
       - "127.0.0.1:2333:2333"
     networks:
       - raeon-network
@@ -55,7 +50,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      # Host-local only; lets a host-run dev bot mirror logs
+      - "127.0.0.1:5432:5432"
     networks:
       - raeon-network
     healthcheck:
@@ -63,19 +60,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # Optional: Redis for caching (if needed in future)
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: raeon-redis
-  #   restart: unless-stopped
-  #   networks:
-  #     - raeon-network
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 3s
-  #     retries: 3
 
 networks:
   raeon-network:
