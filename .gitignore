@@ -3,3 +3,5 @@ yarn.lock
 dist
 .env
 cookies.txt
+docs/.obsidian/workspace.json
+.claude/settings.local.json

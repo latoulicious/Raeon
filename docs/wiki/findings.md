@@ -1,0 +1,52 @@
+---
+title: "Findings"
+aliases:
+  - "Raeon Findings"
+tags:
+  - external-projects
+  - personal
+  - raeon
+  - review
+type: log
+status: active
+updated: 2026-06-07
+---
+
+# Findings
+
+Append-only code-review findings log. Each finding keeps its ID forever;
+fixes are recorded in [resolutions.md](resolutions.md) under the same ID.
+"Code reading" means verified by reading the source, not by running it.
+
+## 2026-06-07 — wiki bootstrap audit
+
+- **F-1** `Dockerfile` — `npm ci --only=production` installs no
+  devDependencies, then `RUN npm run build` invokes `tsc` (a
+  devDependency). The image build is expected to fail (code reading; build
+  not attempted). Fix direction: multi-stage build or install dev deps for
+  the build stage.
+- **F-2** `Dockerfile` + `docker-compose.yml` — healthchecks run
+  `node dist/main.js --health-check`, but `src/main.ts` implements no such
+  flag; the command would boot a second full bot instance instead of a
+  cheap check.
+- **F-3** `docker-compose.yml` — mounts `./cookies.txt` and `./init.sql`;
+  neither file exists in the repo (both gitignored or absent). Docker
+  creates *directories* at missing host paths, which then breaks yt-dlp
+  cookie reads and the postgres init mount.
+- **F-4** Node version drift: `README.md` says Node 21+, `package.json`
+  engines says `>=18`, `Dockerfile` uses `node:18-alpine`. One story
+  needed.
+- **F-5** `docs/DOCKER.md` claimed `YTDLP_COOKIES_PATH` is optional;
+  `loadConfig()` and the startup validator hard-require it.
+- **F-6** `/skip` stops playback instead of advancing: it calls
+  `MusicService.stop()` → `GuildPlayer.stop()` aborts the playback loop;
+  the queue survives but the next track only starts on the next `/play`
+  (code reading).
+- **F-7** `VoiceGateway.play()` rejects after a fixed 300s timeout —
+  tracks longer than ~5 minutes are expected to fail mid-play (code
+  reading).
+- **F-8** Dead code in the logging stack: `DatabaseLogger.cleanupOldLogs()`,
+  `AppLogger.getMetrics()`, `AppLogger.logWithContext()` have no callers;
+  the `logs` table has no retention.
+- **F-9** `Dockerfile` `EXPOSE 3000` — no HTTP server exists; the port is
+  meaningless.

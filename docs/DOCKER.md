@@ -27,7 +27,7 @@ Required in `.env`:
 ```bash
 DISCORD_TOKEN=your_discord_bot_token
 DATABASE_URL=postgresql://raeon:password@postgres:5432/raeon
-YTDLP_COOKIES_PATH=/app/cookies.txt  # Optional
+YTDLP_COOKIES_PATH=/app/cookies.txt  # Required: bot fails startup validation without a readable cookies file
 NODE_ENV=production
 LOG_LEVEL=info
 ```
