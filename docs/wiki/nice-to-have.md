@@ -32,6 +32,9 @@ user approval. Bugs with concrete evidence live in
 
 ## Features
 
+- Replace yt-dlp/ffmpeg with a different extraction/encoding stack —
+  user has a plan in mind (stated 2026-06-07, no spec yet). Blocks the
+  deferred Docker refactor (stabilization R4/R5) and would moot F-10.
 - Track metadata in the queue (title/duration at enqueue time) — would
   also remove the presence `--get-title` subprocess churn.
 - Playlist support (`--no-playlist` is currently forced).
@@ -45,8 +48,8 @@ user approval. Bugs with concrete evidence live in
 - Wire `cleanupOldLogs()` (exists, never called) or a retention policy —
   the `logs` table grows unbounded.
 - Remove or use dead code: `getMetrics()`, `logWithContext()`.
-- Reconcile Node version story (README 21+, engines >=18, Dockerfile
-  node:18 — findings F-4).
+- Bump the Dockerfile base off node:18 (rest of F-4 — engines/README
+  fixed at stabilization R2; lands with the deferred R4 refactor).
 
 ## Quality
 

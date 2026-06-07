@@ -50,3 +50,12 @@ fixes are recorded in [resolutions.md](resolutions.md) under the same ID.
   the `logs` table has no retention.
 - **F-9** `Dockerfile` `EXPOSE 3000` — no HTTP server exists; the port is
   meaningless.
+
+## 2026-06-07 — stabilization R0 audit
+
+- **F-10** `npm audit`: 5 high advisories in `tar <=7.5.10` via
+  `@discordjs/opus → @discordjs/node-pre-gyp → tar` (also reached through
+  `@discordjs/voice → prism-media`). **No fix available upstream.**
+  Install-time only (prebuild download/extract), not runtime code.
+  Accepted risk until the audio-extraction replacement (which may drop
+  @discordjs/opus entirely) lands.

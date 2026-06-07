@@ -19,6 +19,17 @@ a Docker image that actually builds, and a compose file without dead
 mounts. Resolves findings **F-1, F-2 (by removal), F-3, F-4, F-5 (done),
 F-9** from [findings.md](findings.md).
 
+**Status (2026-06-07): R0–R3 done** (`3bc5e93`, `a7d035f`, `4c60d6d`).
+**R4/R5 deferred** (user decision 2026-06-07): yt-dlp/ffmpeg will be
+replaced by something else (no spec yet); the Docker refactor waits for
+that plan so the image isn't built twice. F-1/F-2/F-3/F-9 stay open
+until then; F-4 is half-closed (engines + README on Node 24, Dockerfile
+still node:18). R0 deviations: local machine deliberately has no
+yt-dlp/ffmpeg/.env/cookies — baseline and all verification this round
+were build-level plus a pino-10 logger runtime smoke, not a bot boot.
+R3 deviation: TypeScript 6.0 is out; stayed on latest 5.x (5.9.3) per
+plan. New accepted finding F-10 (tar advisory chain) logged during R0.
+
 Scope decisions (user, 2026-06-07):
 
 - **Node 24** is the single target (engines, README, Docker base image).

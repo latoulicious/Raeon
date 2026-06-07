@@ -22,5 +22,10 @@ remove them when shipped (and record the change in a session log).
 
 [stabilization-plan.md](stabilization-plan.md) — dependency updates,
 Node 24 unification, multi-stage Dockerfile refactor, compose fixes,
-verification. Resolves findings F-1..F-4, F-9. Playback fixes (F-6/F-7)
-remain unapproved in [nice-to-have.md](nice-to-have.md).
+verification. Playback fixes (F-6/F-7) remain unapproved in
+[nice-to-have.md](nice-to-have.md).
+
+Progress: **R0–R3 shipped 2026-06-07** (`3bc5e93`, `a7d035f`,
+`4c60d6d`). **R4/R5/R6 deferred** pending the user's yt-dlp/ffmpeg
+replacement plan — Docker refactor would otherwise be built twice.
+Approval stands; execution resumes when the replacement is specced.

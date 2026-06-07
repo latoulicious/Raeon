@@ -22,6 +22,10 @@ without a resolution here is still open.
 - **F-5** resolved — `docs/DOCKER.md` env example corrected:
   `YTDLP_COOKIES_PATH` marked required (matches `loadConfig()` and the
   startup validator).
+- **F-4** partially resolved (stabilization R2, `a7d035f`) — engines
+  `>=24` and README now agree on Node 24; the Dockerfile `node:18-alpine`
+  base remains until the deferred R4 Docker refactor.
 
-Open: F-1, F-2, F-3, F-4, F-6, F-7, F-8, F-9 (candidate work tracked in
-[nice-to-have.md](nice-to-have.md); none approved yet).
+Open: F-1, F-2, F-3, F-4 (Dockerfile part), F-6, F-7, F-8, F-9, F-10
+(accepted). Docker findings wait on the deferred R4/R5 phases; playback
+findings are unapproved in [nice-to-have.md](nice-to-have.md).
