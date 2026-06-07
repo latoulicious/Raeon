@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Node.js 21+
+- Node.js 24+
 - yt-dlp installed system-wide
 - ffmpeg installed system-wide
 
