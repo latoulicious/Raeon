@@ -2,42 +2,31 @@ import { EmbedBuilder, User, Client, ColorResolvable } from 'discord.js';
 import type { Track } from '../domain/track.js';
 
 export class EmbedService {
+  /** Single palette; helpers must not hardcode one-off colors. */
   private static readonly COLORS = {
-    PRIMARY: '#1DB954' as ColorResolvable, // Spotify green
-    SUCCESS: '#00FF00' as ColorResolvable,
-    ERROR: '#FF6B6B' as ColorResolvable,
-    WARNING: '#FFA500' as ColorResolvable,
-    INFO: '#0099FF' as ColorResolvable,
-    PAUSED: '#FFA500' as ColorResolvable,
-    PLAYING: '#1DB954' as ColorResolvable,
+    ACCENT: '#5865F2' as ColorResolvable,
+    SUCCESS: '#57F287' as ColorResolvable,
+    ERROR: '#ED4245' as ColorResolvable,
+    WARNING: '#FEE75C' as ColorResolvable,
+    INFO: '#3498DB' as ColorResolvable,
   };
 
-  private static readonly EMojis = {
-    PLAY: '▶️',
-    PAUSE: '⏸️',
-    SKIP: '⏭️',
-    STOP: '⏹️',
-    QUEUE: '📋',
-    SEARCH: '🔍',
-    ERROR: '❌',
+  /**
+   * Status icons live here only. The success/error/info helpers prefix
+   * them; descriptions passed in must never carry their own.
+   */
+  private static readonly EMOJIS = {
     SUCCESS: '✅',
+    ERROR: '❌',
     INFO: 'ℹ️',
     WARNING: '⚠️',
   };
 
-  static createBaseEmbed(title: string, color: ColorResolvable = this.COLORS.PRIMARY): EmbedBuilder {
+  static createBaseEmbed(title: string, color: ColorResolvable = this.COLORS.ACCENT): EmbedBuilder {
     return new EmbedBuilder()
       .setTitle(title)
       .setColor(color)
       .setTimestamp();
-  }
-
-  static createMusicEmbed(title: string, client: Client): EmbedBuilder {
-    const embed = this.createBaseEmbed(title, this.COLORS.PRIMARY);
-    if (client.user) {
-      embed.setThumbnail(client.user.displayAvatarURL());
-    }
-    return embed;
   }
 
   static createNowPlayingEmbed(
@@ -47,12 +36,8 @@ export class EmbedService {
     user: User,
     client: Client
   ): EmbedBuilder {
-    const videoId = this.extractVideoId(track.uri);
-    const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-
-    const embed = this.createMusicEmbed('Now Playing', client)
+    const embed = this.createBaseEmbed('Now Playing', isPaused ? this.COLORS.WARNING : this.COLORS.ACCENT)
       .setDescription(`**[${track.title}](${track.uri})**\nby ${track.author}`)
-      .setColor(isPaused ? this.COLORS.PAUSED : this.COLORS.PLAYING)
       .setURL(track.uri)
       .addFields(
         {
@@ -78,6 +63,7 @@ export class EmbedService {
         iconURL: user.displayAvatarURL()
       });
 
+    const thumbnailUrl = this.trackThumbnail(track);
     if (thumbnailUrl) {
       embed.setThumbnail(thumbnailUrl);
     }
@@ -92,18 +78,16 @@ export class EmbedService {
     isPlaying: boolean,
     client: Client
   ): EmbedBuilder {
-    const embed = this.createMusicEmbed('Music Queue', client);
+    const embed = this.createBaseEmbed('Music Queue');
 
     if ((isPlaying || isPaused) && currentTrack) {
-      const videoId = this.extractVideoId(currentTrack.uri);
-      const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-
       embed.addFields({
         name: 'Now Playing',
-        value: `${isPaused ? '⏸️ Currently Paused' : '▶️ Currently Streaming'}\n[${currentTrack.title}](${currentTrack.uri}) — ${currentTrack.author} (${this.formatTrackDuration(currentTrack)})`,
+        value: `${isPaused ? 'Paused' : 'Playing'}\n${this.formatTrackLine(currentTrack)}`,
         inline: false
       });
 
+      const thumbnailUrl = this.trackThumbnail(currentTrack);
       if (thumbnailUrl) {
         embed.setThumbnail(thumbnailUrl);
       }
@@ -111,22 +95,22 @@ export class EmbedService {
 
     if (queue.length > 0) {
       const queueList = queue.slice(0, 10).map((track, index) => {
-        return `${index + 1}. [${track.title}](${track.uri}) — ${track.author} (${this.formatTrackDuration(track)})`;
+        return `${index + 1}. ${this.formatTrackLine(track)}`;
       }).join('\n');
 
-      embed.addFields({ 
-        name: `📋 Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})`, 
+      embed.addFields({
+        name: `Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})`,
         value: queueList || 'No songs in queue',
-        inline: false 
+        inline: false
       });
 
       if (queue.length > 10) {
-        embed.setFooter({ 
-          text: `...and ${queue.length - 10} more songs • Total: ${queue.length} songs` 
+        embed.setFooter({
+          text: `...and ${queue.length - 10} more songs • Total: ${queue.length} songs`
         });
       } else {
-        embed.setFooter({ 
-          text: `Total: ${queue.length} song${queue.length === 1 ? '' : 's'} in queue` 
+        embed.setFooter({
+          text: `Total: ${queue.length} song${queue.length === 1 ? '' : 's'} in queue`
         });
       }
     } else {
@@ -138,18 +122,17 @@ export class EmbedService {
   }
 
   static createEmptyQueueEmbed(client: Client): EmbedBuilder {
-    return this.createMusicEmbed('Now Playing', client)
+    return this.createBaseEmbed('Now Playing', this.COLORS.INFO)
       .setDescription('Nothing is currently playing')
-      .setColor(this.COLORS.ERROR)
       .setFooter({ text: 'Use /play to start playing music' });
   }
 
   static createSuccessEmbed(title: string, description: string, user?: User): EmbedBuilder {
     const embed = this.createBaseEmbed(title, this.COLORS.SUCCESS)
-      .setDescription(`${this.EMojis.SUCCESS} ${description}`);
+      .setDescription(`${this.EMOJIS.SUCCESS} ${description}`);
 
     if (user) {
-      embed.setFooter({ 
+      embed.setFooter({
         text: `Requested by ${user.tag}`,
         iconURL: user.displayAvatarURL()
       });
@@ -160,10 +143,10 @@ export class EmbedService {
 
   static createErrorEmbed(title: string, description: string, user?: User): EmbedBuilder {
     const embed = this.createBaseEmbed(title, this.COLORS.ERROR)
-      .setDescription(`${this.EMojis.ERROR} ${description}`);
+      .setDescription(`${this.EMOJIS.ERROR} ${description}`);
 
     if (user) {
-      embed.setFooter({ 
+      embed.setFooter({
         text: `Requested by ${user.tag}`,
         iconURL: user.displayAvatarURL()
       });
@@ -174,10 +157,10 @@ export class EmbedService {
 
   static createInfoEmbed(title: string, description: string, user?: User): EmbedBuilder {
     const embed = this.createBaseEmbed(title, this.COLORS.INFO)
-      .setDescription(`${this.EMojis.INFO} ${description}`);
+      .setDescription(`${this.EMOJIS.INFO} ${description}`);
 
     if (user) {
-      embed.setFooter({ 
+      embed.setFooter({
         text: `Requested by ${user.tag}`,
         iconURL: user.displayAvatarURL()
       });
@@ -192,17 +175,16 @@ export class EmbedService {
     user: User,
     client: Client
   ): EmbedBuilder {
-    const videoId = this.extractVideoId(track.uri);
-    const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
-    const trackLine = `[${track.title}](${track.uri}) — ${track.author} (${this.formatTrackDuration(track)})`;
+    const trackLine = this.formatTrackLine(track);
 
     const description = queueLength === 0
-      ? `▶️ **Now playing**\n${trackLine}`
-      : `✅ **Song added to queue!**\n📋 Queue: ${queueLength} song${queueLength === 1 ? '' : 's'} remaining\n⏭️ Added: ${trackLine}`;
+      ? `**Now playing**\n${trackLine}`
+      : `**Song added to queue!**\nQueue: ${queueLength} song${queueLength === 1 ? '' : 's'} remaining\nAdded: ${trackLine}`;
 
     const embed = this.createSuccessEmbed('Music Player', description, user)
       .setURL(track.uri);
 
+    const thumbnailUrl = this.trackThumbnail(track);
     if (thumbnailUrl) {
       embed.setThumbnail(thumbnailUrl);
     }
@@ -211,25 +193,24 @@ export class EmbedService {
   }
 
   static createSkipEmbed(queueLength: number, user: User): EmbedBuilder {
-    const description = `⏭️ **Skipped current song!**\n📋 Queue: ${queueLength > 0 
-      ? `${queueLength} song${queueLength === 1 ? '' : 's'} remaining` 
+    const description = `**Skipped current song!**\nQueue: ${queueLength > 0
+      ? `${queueLength} song${queueLength === 1 ? '' : 's'} remaining`
       : 'Empty - add more songs with /play!'}`;
 
     return this.createSuccessEmbed('Skip', description, user);
   }
 
   static createPauseEmbed(currentTrack: Track | null, user: User): EmbedBuilder {
-    const trackLine = currentTrack ? `[${currentTrack.title}](${currentTrack.uri})` : 'Current track';
-    const description = `⏸️ **Playback has been paused**\n${trackLine}`;
+    const trackLine = currentTrack ? this.formatTrackLine(currentTrack) : 'Current track';
+    const description = `**Playback has been paused**\n${trackLine}`;
     return this.createSuccessEmbed('Paused', description, user)
-      .setColor(this.COLORS.PAUSED);
+      .setColor(this.COLORS.WARNING);
   }
 
   static createResumeEmbed(currentTrack: Track | null, queueLength: number, user: User): EmbedBuilder {
-    const trackLine = currentTrack ? `[${currentTrack.title}](${currentTrack.uri})` : 'Current track';
-    const description = `▶️ **Playback has been resumed**\n${trackLine}`;
-    const embed = this.createSuccessEmbed('Resumed', description, user)
-      .setColor(this.COLORS.PLAYING);
+    const trackLine = currentTrack ? this.formatTrackLine(currentTrack) : 'Current track';
+    const description = `**Playback has been resumed**\n${trackLine}`;
+    const embed = this.createSuccessEmbed('Resumed', description, user);
 
     if (queueLength > 0) {
       embed.addFields({
@@ -252,11 +233,10 @@ export class EmbedService {
 
   static createRemoveEmbed(position: number, track: Track, newQueueSize: number, user: User): EmbedBuilder {
     return this.createSuccessEmbed('Removed', `Song removed from queue`, user)
-      .setColor('#E74C3C')
       .addFields(
         {
           name: 'Removed Song',
-          value: `Position ${position}: [${track.title}](${track.uri})`,
+          value: `Position ${position}: ${this.formatTrackLine(track)}`,
           inline: false
         },
         {
@@ -269,7 +249,6 @@ export class EmbedService {
 
   static createShuffleEmbed(count: number, user: User): EmbedBuilder {
     return this.createSuccessEmbed('Shuffled', `Queue has been shuffled`, user)
-      .setColor('#9B59B6')
       .addFields({
         name: 'Queue Status',
         value: `${count} song${count === 1 ? '' : 's'} shuffled`,
@@ -278,15 +257,11 @@ export class EmbedService {
   }
 
   static createSearchEmbed(query: string, results: readonly Track[], limit: number, client: Client): EmbedBuilder {
-    const embed = this.createBaseEmbed(`Search Results for "${query}"`, '#FF0000')
+    const embed = this.createBaseEmbed(`Search Results for "${query}"`, this.COLORS.INFO)
       .setDescription(`Found ${results.length} result${results.length === 1 ? '' : 's'} for your search`)
       .setFooter({
         text: `Use /play with the URL or try /play ytsearch1:"song name" for direct search • Results: ${results.length}/${limit}`
       });
-
-    if (client.user) {
-      embed.setThumbnail(client.user.displayAvatarURL());
-    }
 
     results.forEach((track, index) => {
       embed.addFields({
@@ -314,12 +289,11 @@ export class EmbedService {
   }
 
   static createPruneEmbed(count: number, user: User): EmbedBuilder {
-    return this.createSuccessEmbed('Prune', `Successfully deleted ${count} bot messages.`, user)
-      .setColor(this.COLORS.INFO);
+    return this.createSuccessEmbed('Prune', `Successfully deleted ${count} bot messages.`, user);
   }
 
   static createHelpEmbed(client: Client): EmbedBuilder {
-    const embed = this.createBaseEmbed('Raeon', this.COLORS.PRIMARY)
+    const embed = this.createBaseEmbed('Raeon', this.COLORS.ACCENT)
       .setURL('https://github.com/latoulicious/Raeon')
       .setDescription('A powerful Discord music bot with clean architecture and stability features.');
 
@@ -328,9 +302,9 @@ export class EmbedService {
     }
 
     embed.addFields(
-      { 
-        name: 'Music Commands', 
-        value: 
+      {
+        name: 'Music Commands',
+        value:
           '`/play <url>` - Play a song from YouTube\n' +
           '`/stop` - Stop playing and disconnect\n' +
           '`/skip` - Skip the current song\n' +
@@ -342,15 +316,15 @@ export class EmbedService {
           '`/remove <position>` - Remove song from queue\n' +
           '`/clear` - Clear the queue\n' +
           '`/search <query>` - Search for songs',
-        inline: false 
+        inline: false
       },
-      { 
-        name: 'Utility Commands', 
-        value: 
+      {
+        name: 'Utility Commands',
+        value:
           '`/ping` - Check bot latency\n' +
           '`/commands` - Show this help message\n' +
           '`/prune [amount]` - Delete bot messages',
-        inline: false 
+        inline: false
       },
       {
         name: 'Features',
@@ -361,11 +335,22 @@ export class EmbedService {
         inline: false
       }
     )
-    .setFooter({ 
+    .setFooter({
       text: 'Made with TypeScript + Discord.js'
     });
 
     return embed;
+  }
+
+  /** Shared track line: title link — author (duration). */
+  private static formatTrackLine(track: Track): string {
+    return `[${track.title}](${track.uri}) — ${track.author} (${this.formatTrackDuration(track)})`;
+  }
+
+  /** YouTube thumbnail for a track, or null when no video id is found. */
+  private static trackThumbnail(track: Track): string | null {
+    const videoId = this.extractVideoId(track.uri);
+    return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
   }
 
   /** Track.duration is in milliseconds; live streams report no usable length. */
@@ -387,7 +372,7 @@ export class EmbedService {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   }
 
-  static extractVideoId(url: string): string | null {
+  private static extractVideoId(url: string): string | null {
     const patterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
       /^([^&\n?#]+)$/
@@ -401,15 +386,5 @@ export class EmbedService {
     }
 
     return null;
-  }
-
-  static createYouTubeThumbnail(url: string, quality: 'default' | 'medium' | 'high' | 'maxres' = 'maxres'): string | null {
-    const videoId = this.extractVideoId(url);
-    return videoId ? `https://img.youtube.com/vi/${videoId}/${quality}.jpg` : null;
-  }
-
-  static createShortYouTubeUrl(url: string): string | null {
-    const videoId = this.extractVideoId(url);
-    return videoId ? `https://youtu.be/${videoId}` : null;
   }
 }
