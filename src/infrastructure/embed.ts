@@ -92,19 +92,17 @@ export class EmbedService {
     }
 
     if (queue.length > 0) {
-      const queueList = queue.slice(0, 10).map((track, index) => {
-        return `${index + 1}. ${this.formatTrackLine(track)}`;
-      }).join('\n');
+      const { text, shown } = this.formatTrackList(queue, 1024, 10);
 
       embed.addFields({
         name: `Up Next (${queue.length} song${queue.length === 1 ? '' : 's'})`,
-        value: queueList || 'No songs in queue',
+        value: text || 'No songs in queue',
         inline: false
       });
 
-      if (queue.length > 10) {
+      if (queue.length > shown) {
         embed.setFooter({
-          text: `...and ${queue.length - 10} more songs • Total: ${queue.length} songs`
+          text: `...and ${queue.length - shown} more songs • Total: ${queue.length} songs`
         });
       } else {
         embed.setFooter({
@@ -269,14 +267,12 @@ export class EmbedService {
   }
 
   static createSearchEmbed(query: string, results: readonly Track[], limit: number, user: User): EmbedBuilder {
-    const resultList = results
-      .map((track, index) => `${index + 1}. ${this.formatTrackLine(track)}`)
-      .join('\n');
+    const { text, shown } = this.formatTrackList(results, 4096, results.length);
 
-    return this.createBaseEmbed(`Search Results for "${query}"`, this.COLORS.INFO)
-      .setDescription(resultList)
+    return this.createBaseEmbed(`Search Results for "${this.truncate(query, 100)}"`, this.COLORS.INFO)
+      .setDescription(text)
       .setFooter({
-        text: `${results.length}/${limit} results • Requested by ${user.tag}`,
+        text: `${shown}/${limit} results • Requested by ${user.tag}`,
         iconURL: user.displayAvatarURL()
       });
   }
@@ -348,7 +344,36 @@ export class EmbedService {
 
   /** Shared track line: title link — author (duration). */
   private static formatTrackLine(track: Track): string {
-    return `[${track.title}](${track.uri}) — ${track.author} (${this.formatTrackDuration(track)})`;
+    return `[${this.truncate(track.title, 80)}](${track.uri}) — ${this.truncate(track.author, 40)} (${this.formatTrackDuration(track)})`;
+  }
+
+  /**
+   * Numbered track list bounded by a character budget so it never
+   * exceeds Discord's embed limits (field value 1024, description 4096).
+   */
+  private static formatTrackList(
+    tracks: readonly Track[],
+    maxChars: number,
+    maxItems: number
+  ): { text: string; shown: number } {
+    const lines: string[] = [];
+    let used = 0;
+    for (const [index, track] of tracks.entries()) {
+      if (index >= maxItems) {
+        break;
+      }
+      const line = `${index + 1}. ${this.formatTrackLine(track)}`;
+      if (used + line.length + 1 > maxChars) {
+        break;
+      }
+      lines.push(line);
+      used += line.length + 1;
+    }
+    return { text: lines.join('\n'), shown: lines.length };
+  }
+
+  private static truncate(text: string, maxLength: number): string {
+    return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
   }
 
   /** YouTube thumbnail for a track, or null when no video id is found. */
