@@ -400,10 +400,14 @@ export class EmbedService {
     return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
   }
 
-  /** YouTube thumbnail for a track, or null when no video id is found. */
+  /**
+   * YouTube thumbnail for a track, or null when no video id is found.
+   * hqdefault exists for every video; maxresdefault 404s for non-HD
+   * uploads and Discord then silently drops the thumbnail.
+   */
   private static trackThumbnail(track: Track): string | null {
     const videoId = this.extractVideoId(track.uri);
-    return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null;
+    return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
   }
 
   /** Track.duration is in milliseconds; live streams report no usable length. */
