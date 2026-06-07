@@ -1,7 +1,8 @@
-import type { VoiceGateway, AudioExtractor, AudioEncoder } from '../../domain/audio.js';
+import type { AudioExtractor } from '../../domain/audio.js';
 import { GuildPlayer, GuildPlayerError } from '../../domain/guild-player.js';
+import type { Track } from '../../domain/track.js';
+import { LavalinkClient, LavalinkError } from '../../infrastructure/lavalink.js';
 import { YtdlpExtractorError } from '../../infrastructure/yt-dlp.js';
-import { FfmpegEncoderError } from '../../infrastructure/ffmpeg.js';
 import { appLogger } from '../../infrastructure/logger.js';
 import { TimeoutService } from '../../infrastructure/timeout.js';
 
@@ -22,9 +23,8 @@ export class MusicService {
   private readonly lastTextChannelIds = new Map<string, string>();
 
   constructor(
-    private readonly voiceGateway: VoiceGateway,
+    private readonly lavalink: LavalinkClient,
     private readonly extractor: AudioExtractor,
-    private readonly encoder: AudioEncoder,
     private readonly onTimeoutNotification?: TimeoutNotificationCallback,
   ) {
     this.timeoutService = new TimeoutService(async (guildId) => {
@@ -34,9 +34,9 @@ export class MusicService {
         this.timeoutService.updateActivity(guildId);
         return;
       }
-      
+
       logger.info({ guildId }, 'Idle timeout reached, disconnecting');
-      
+
       // Send notification if we have a text channel ID
       const textChannelId = this.lastTextChannelIds.get(guildId);
       if (textChannelId && this.onTimeoutNotification) {
@@ -52,6 +52,8 @@ export class MusicService {
     this.timeoutService.startMonitoring();
   }
 
+  // Used by the /search and /play ytsearch paths only; replaced by
+  // Lavalink REST resolution in the commands at L3.
   getExtractor(): AudioExtractor {
     return this.extractor;
   }
@@ -60,29 +62,36 @@ export class MusicService {
     try {
       this.timeoutService.updateActivity(guildId);
       this.lastTextChannelIds.set(guildId, textChannelId);
+
       let player = this.players.get(guildId);
-      
-      if (!player) {
-        player = new GuildPlayer(guildId, this.voiceGateway, this.extractor, this.encoder);
-        this.players.set(guildId, player);
-        logger.info({ guildId }, 'Created new guild player');
-      }
 
       // Check queue limit (20 songs max)
-      const currentQueue = player.getQueue();
       const maxQueueSize = 20;
-      
-      if (currentQueue.length >= maxQueueSize) {
+      if (player && player.getQueue().length >= maxQueueSize) {
         throw new MusicServiceError(
           'Queue is full',
           `🎵 **Queue Full**: The queue has reached its maximum limit of ${maxQueueSize} songs. Use /clear to remove all songs or wait for some to finish playing.`
         );
       }
 
-      await this.voiceGateway.join(guildId, voiceChannelId);
-      player.enqueue(url);
-      logger.debug({ guildId, url, queueSize: currentQueue.length + 1 }, 'Added track to queue');
-      
+      const track = await this.lavalink.resolveTrack(url);
+      if (!track) {
+        throw new MusicServiceError(
+          'No track found',
+          '🎵 **Nothing Found**: No playable track was found for that URL or query. Please check it and try again.'
+        );
+      }
+
+      if (!player) {
+        const port = await this.lavalink.join(guildId, voiceChannelId);
+        player = new GuildPlayer(guildId, port, (error) => this.handlePlaybackError(guildId, error));
+        this.players.set(guildId, player);
+        logger.info({ guildId }, 'Created new guild player');
+      }
+
+      player.enqueue(track);
+      logger.debug({ guildId, title: track.title, queueSize: player.getQueue().length }, 'Added track to queue');
+
       // Start playback without waiting for it to complete
       player.start().catch(error => {
         this.handlePlaybackError(guildId, error);
@@ -96,7 +105,17 @@ export class MusicService {
     this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
-      player.stop();
+      player.stop().catch(error => {
+        this.handlePlaybackError(guildId, error);
+      });
+    }
+  }
+
+  async skip(guildId: string): Promise<void> {
+    this.timeoutService.updateActivity(guildId);
+    const player = this.players.get(guildId);
+    if (player) {
+      await player.skip();
     }
   }
 
@@ -104,16 +123,29 @@ export class MusicService {
     this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
-      player.clear();
+      player.clear().catch(error => {
+        this.handlePlaybackError(guildId, error);
+      });
     }
   }
 
   async disconnect(guildId: string): Promise<void> {
     this.timeoutService.removeGuild(guildId);
     this.lastTextChannelIds.delete(guildId);
-    this.clear(guildId);
-    await this.voiceGateway.disconnect(guildId);
-    this.players.delete(guildId);
+    const player = this.players.get(guildId);
+    if (player) {
+      try {
+        await player.clear();
+      } catch (error) {
+        logger.warn({ guildId, error }, 'Error clearing player during disconnect');
+      }
+      this.players.delete(guildId);
+    }
+    try {
+      await this.lavalink.leave(guildId);
+    } catch (error) {
+      logger.warn({ guildId, error }, 'Error leaving voice channel during disconnect');
+    }
   }
 
   async cleanup(): Promise<void> {
@@ -129,9 +161,11 @@ export class MusicService {
     }
   }
 
+  // String (uri) surface preserved for the embeds/presence until L3
+  // switches them to Track metadata.
   getQueue(guildId: string): readonly string[] {
     const player = this.players.get(guildId);
-    return player?.getQueue() ?? [];
+    return player?.getQueue().map(track => track.uri) ?? [];
   }
 
   isPlaying(guildId: string): boolean {
@@ -148,7 +182,9 @@ export class MusicService {
     this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     if (player) {
-      player.pause();
+      player.pause().catch(error => {
+        this.handlePlaybackError(guildId, error);
+      });
     }
   }
 
@@ -171,18 +207,18 @@ export class MusicService {
   remove(guildId: string, position: number): string | null {
     this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
-    return player?.remove(position) ?? null;
+    return player?.remove(position)?.uri ?? null;
   }
 
   getCurrentTrack(guildId: string): string | null {
     const player = this.players.get(guildId);
-    return player?.getCurrentTrack() ?? null;
+    return player?.getCurrentTrack()?.uri ?? null;
   }
 
   getAnyPlayingTrack(): string | null {
     for (const player of this.players.values()) {
       if (player.getIsPlaying()) {
-        return player.getCurrentTrack();
+        return player.getCurrentTrack()?.uri ?? null;
       }
     }
     return null;
@@ -191,19 +227,13 @@ export class MusicService {
   private handlePlaybackError(guildId: string, error: unknown): void {
     logger.error({ guildId, error }, 'Error during playback');
     appLogger.incrementStreamFailures();
-    
-    // Clean up player on critical errors
-    if (error instanceof YtdlpExtractorError || error instanceof FfmpegEncoderError) {
-      this.players.delete(guildId);
-      logger.info({ guildId }, 'Removed player due to critical error');
-    }
   }
 
   private handleServiceError(error: unknown): MusicServiceError {
     if (error instanceof MusicServiceError) {
       return error;
     }
-    
+
     if (error instanceof YtdlpExtractorError) {
       return new MusicServiceError(
         'yt-dlp extraction failed',
@@ -215,15 +245,15 @@ export class MusicService {
         error
       );
     }
-    
-    if (error instanceof FfmpegEncoderError) {
+
+    if (error instanceof LavalinkError) {
       return new MusicServiceError(
-        'FFmpeg encoding failed',
-        '🎵 **Processing Failed**: Unable to process the audio file. This is usually a temporary issue. Please try again.',
+        'Lavalink request failed',
+        '🎵 **Playback Service Error**: The audio service could not load that track. Please try again in a moment.',
         error
       );
     }
-    
+
     if (error instanceof GuildPlayerError) {
       return new MusicServiceError(
         'Guild player error',
@@ -231,7 +261,7 @@ export class MusicService {
         error
       );
     }
-    
+
     if (error instanceof Error) {
       if (error.message.includes('voice')) {
         return new MusicServiceError(
@@ -241,7 +271,7 @@ export class MusicService {
         );
       }
     }
-    
+
     return new MusicServiceError(
       'Unknown error',
       '❌ **Unexpected Error**: An unexpected error occurred. Please try again later.',

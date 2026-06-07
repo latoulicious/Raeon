@@ -29,7 +29,7 @@ async function execute(
 
   try {
     const queue = services.music.getQueue(guildId);
-    services.music.stop(guildId);
+    await services.music.skip(guildId);
     
     const embed = EmbedService.createSkipEmbed(queue.length, interaction.user);
     

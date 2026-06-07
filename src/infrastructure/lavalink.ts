@@ -1,5 +1,8 @@
 import { Client } from 'discord.js';
-import { Connectors, Shoukaku } from 'shoukaku';
+import { Connectors, LoadType, Shoukaku } from 'shoukaku';
+import type { Player, Track as ShoukakuTrack } from 'shoukaku';
+import type { PlayerPort, TrackEndReason } from '../domain/guild-player.js';
+import type { Track } from '../domain/track.js';
 import { appLogger } from './logger.js';
 
 const logger = appLogger.getLogger('lavalink');
@@ -10,10 +13,54 @@ export interface LavalinkConfig {
   password: string;
 }
 
+export class LavalinkError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = 'LavalinkError';
+  }
+}
+
+/** Adapts a Shoukaku Player to the domain PlayerPort. */
+class ShoukakuPlayerAdapter implements PlayerPort {
+  constructor(private readonly player: Player) {
+    this.player.on('exception', (event) => {
+      appLogger.incrementStreamFailures();
+      logger.error({ guildId: player.guildId, exception: event.exception }, 'Track exception');
+    });
+    this.player.on('stuck', (event) => {
+      appLogger.incrementStreamFailures();
+      logger.warn({ guildId: player.guildId, thresholdMs: event.thresholdMs }, 'Track stuck');
+    });
+    this.player.on('closed', (event) => {
+      logger.warn({ guildId: player.guildId, code: event.code, reason: event.reason }, 'Voice websocket closed');
+    });
+  }
+
+  async playTrack(encoded: string): Promise<void> {
+    await this.player.playTrack({ track: { encoded } });
+  }
+
+  async stopTrack(): Promise<void> {
+    await this.player.stopTrack();
+  }
+
+  async setPaused(paused: boolean): Promise<void> {
+    await this.player.setPaused(paused);
+  }
+
+  onTrackEnd(listener: (reason: TrackEndReason) => void): void {
+    this.player.on('end', (event) => listener(event.reason));
+  }
+
+  onTrackStuck(listener: () => void): void {
+    this.player.on('stuck', () => listener());
+  }
+}
+
 export class LavalinkClient {
   private readonly shoukaku: Shoukaku;
 
-  constructor(client: Client, config: LavalinkConfig) {
+  constructor(private readonly client: Client, config: LavalinkConfig) {
     this.shoukaku = new Shoukaku(new Connectors.DiscordJS(client), [
       {
         name: 'main',
@@ -43,7 +90,65 @@ export class LavalinkClient {
     });
   }
 
+  async join(guildId: string, voiceChannelId: string): Promise<PlayerPort> {
+    const shardId = this.client.guilds.cache.get(guildId)?.shardId ?? 0;
+    const player = await this.shoukaku.joinVoiceChannel({
+      guildId,
+      channelId: voiceChannelId,
+      shardId,
+      deaf: true,
+    });
+    logger.info({ guildId, voiceChannelId }, 'Joined voice channel');
+    return new ShoukakuPlayerAdapter(player);
+  }
+
+  async leave(guildId: string): Promise<void> {
+    await this.shoukaku.leaveVoiceChannel(guildId);
+    logger.info({ guildId }, 'Left voice channel');
+  }
+
+  /**
+   * Resolve a URL or `ytsearch:` identifier to the first playable track.
+   * Returns null when nothing matches. The full loadType handling (playlist
+   * notices, search lists) moves into the commands at L3.
+   */
+  async resolveTrack(identifier: string): Promise<Track | null> {
+    const node = this.shoukaku.getIdealNode();
+    if (!node) {
+      throw new LavalinkError('No Lavalink node is connected');
+    }
+
+    const result = await node.rest.resolve(identifier);
+    if (!result) {
+      return null;
+    }
+
+    switch (result.loadType) {
+      case LoadType.TRACK:
+        return toDomainTrack(result.data);
+      case LoadType.SEARCH:
+        return result.data[0] ? toDomainTrack(result.data[0]) : null;
+      case LoadType.PLAYLIST:
+        return result.data.tracks[0] ? toDomainTrack(result.data.tracks[0]) : null;
+      case LoadType.ERROR:
+        throw new LavalinkError(`Track load failed: ${result.data.message ?? 'unknown error'}`);
+      case LoadType.EMPTY:
+      default:
+        return null;
+    }
+  }
+
   get raw(): Shoukaku {
     return this.shoukaku;
   }
+}
+
+function toDomainTrack(track: ShoukakuTrack): Track {
+  return {
+    encoded: track.encoded,
+    title: track.info.title,
+    author: track.info.author,
+    duration: track.info.length,
+    uri: track.info.uri ?? track.info.identifier,
+  };
 }

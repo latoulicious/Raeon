@@ -1,11 +1,32 @@
-import { Readable } from 'node:stream';
-import type { VoiceGateway, AudioExtractor, AudioEncoder } from './audio.js';
+import type { Track } from './track.js';
+
+export type TrackEndReason = 'finished' | 'loadFailed' | 'stopped' | 'replaced' | 'cleanup';
+
+/**
+ * Minimal playback surface the domain needs from a Lavalink player.
+ * Implemented by the Shoukaku adapter in infrastructure/lavalink.ts so
+ * no library types leak into the domain layer.
+ */
+export interface PlayerPort {
+  playTrack(encoded: string): Promise<void>;
+  stopTrack(): Promise<void>;
+  setPaused(paused: boolean): Promise<void>;
+  onTrackEnd(listener: (reason: TrackEndReason) => void): void;
+  /**
+   * Stuck tracks emit no `end` event, so the orchestrator must force-stop.
+   * Exceptions are NOT surfaced here: fatal ones are followed by
+   * `end(loadFailed)` (which auto-advances) and non-fatal ones leave the
+   * track playing, so advancing on `exception` would either double-advance
+   * or skip a live track. A track hung by a non-fatal failure surfaces as
+   * `stuck`. The adapter logs/counts exceptions.
+   */
+  onTrackStuck(listener: () => void): void;
+}
 
 enum PlayerState {
   IDLE = 'idle',
   PLAYING = 'playing',
   PAUSED = 'paused',
-  STOPPING = 'stopping'
 }
 
 export class GuildPlayerError extends Error {
@@ -15,129 +36,96 @@ export class GuildPlayerError extends Error {
   }
 }
 
+/**
+ * Queue orchestrator around a Lavalink player. The node streams audio;
+ * this class only decides what plays next. The track `end` event drives
+ * auto-advance: finished/loadFailed/skip all advance, a user stop halts
+ * with the queue intact, pause/resume are native (position preserved).
+ */
 export class GuildPlayer {
-  private queue: string[] = [];
-  private currentAbortController: AbortController | null = null;
+  private queue: Track[] = [];
   private state: PlayerState = PlayerState.IDLE;
-  private currentTrack: string | null = null;
-  private isProcessingQueue = false;
-  private pausedTrack: string | null = null;
+  private currentTrack: Track | null = null;
+  /** Set by stop() so the resulting `end` event does not auto-advance */
+  private suppressAdvance = false;
 
   constructor(
     private readonly guildId: string,
-    private readonly voiceGateway: VoiceGateway,
-    private readonly extractor: AudioExtractor,
-    private readonly encoder: AudioEncoder,
-  ) {}
+    private readonly player: PlayerPort,
+    private readonly onError?: (error: Error) => void,
+  ) {
+    this.player.onTrackEnd((reason) => this.handleTrackEnd(reason));
+    this.player.onTrackStuck(() => this.advanceAfterFailure());
+  }
 
-  enqueue(url: string): void {
-    this.queue.push(url);
+  enqueue(track: Track): void {
+    this.queue.push(track);
   }
 
   async start(): Promise<void> {
-    if (this.state === PlayerState.PLAYING) {
-      return;
-    }
-    
     if (this.state === PlayerState.PAUSED) {
-      // Resume from paused state
       return this.resume();
     }
-    
-    if (this.queue.length === 0) {
+    if (this.state === PlayerState.PLAYING || this.queue.length === 0) {
       return;
     }
 
-    if (this.isProcessingQueue) {
+    const next = this.queue.shift();
+    if (!next) {
       return;
     }
 
-    this.isProcessingQueue = true;
+    this.currentTrack = next;
     this.state = PlayerState.PLAYING;
-    this.currentAbortController = new AbortController();
 
     try {
-      while (this.queue.length > 0 && !this.currentAbortController.signal.aborted && this.state === PlayerState.PLAYING) {
-        const url = this.queue.shift()!;
-        this.currentTrack = url;
-        await this.playTrack(url, this.currentAbortController.signal);
-      }
+      await this.player.playTrack(next.encoded);
     } catch (error) {
-      if (error instanceof GuildPlayerError) {
-        throw error;
-      }
-      throw new GuildPlayerError('Playback failed', error instanceof Error ? error : new Error(String(error)));
-    } finally {
-      this.state = PlayerState.IDLE;
       this.currentTrack = null;
-      this.currentAbortController = null;
-      this.isProcessingQueue = false;
+      this.state = PlayerState.IDLE;
+      throw new GuildPlayerError('Playback failed', error instanceof Error ? error : new Error(String(error)));
     }
   }
 
-  stop(): void {
-    if (this.state === PlayerState.STOPPING) {
+  /** Stop the current track; the queue survives and does not auto-advance. */
+  async stop(): Promise<void> {
+    if (this.state === PlayerState.IDLE) {
       return;
     }
-    
-    this.state = PlayerState.STOPPING;
-    this.pausedTrack = null;
-    
-    if (this.currentAbortController) {
-      this.currentAbortController.abort();
-    }
+    this.suppressAdvance = true;
+    await this.player.stopTrack();
   }
 
-  pause(): void {
-    if (this.state === PlayerState.PLAYING) {
-      this.state = PlayerState.PAUSED;
-      this.pausedTrack = this.currentTrack;
-      if (this.currentAbortController) {
-        this.currentAbortController.abort();
-      }
+  /** Stop the current track and let the `end` event start the next one. */
+  async skip(): Promise<void> {
+    if (this.state === PlayerState.IDLE) {
+      return;
     }
+    await this.player.stopTrack();
+  }
+
+  async pause(): Promise<void> {
+    if (this.state !== PlayerState.PLAYING) {
+      return;
+    }
+    await this.player.setPaused(true);
+    this.state = PlayerState.PAUSED;
   }
 
   async resume(): Promise<void> {
-    if (this.state !== PlayerState.PAUSED || !this.pausedTrack) {
+    if (this.state !== PlayerState.PAUSED) {
       return;
     }
-
+    await this.player.setPaused(false);
     this.state = PlayerState.PLAYING;
-    this.currentTrack = this.pausedTrack;
-    this.currentAbortController = new AbortController();
-    this.isProcessingQueue = true;
-
-    try {
-      await this.playTrack(this.pausedTrack, this.currentAbortController.signal);
-      
-      // After resuming, continue with the rest of the queue
-      while (this.queue.length > 0 && !this.currentAbortController.signal.aborted && this.state === PlayerState.PLAYING) {
-        const url = this.queue.shift()!;
-        this.currentTrack = url;
-        await this.playTrack(url, this.currentAbortController.signal);
-      }
-    } catch (error) {
-      if (error instanceof GuildPlayerError) {
-        throw error;
-      }
-      throw new GuildPlayerError('Resume failed', error instanceof Error ? error : new Error(String(error)));
-    } finally {
-      this.state = PlayerState.IDLE;
-      this.currentTrack = null;
-      this.pausedTrack = null;
-      this.currentAbortController = null;
-      this.isProcessingQueue = false;
-    }
   }
 
-  clear(): void {
-    this.stop();
+  async clear(): Promise<void> {
     this.queue = [];
-    this.pausedTrack = null;
+    await this.stop();
   }
 
-  getQueue(): readonly string[] {
+  getQueue(): readonly Track[] {
     return this.queue;
   }
 
@@ -149,23 +137,8 @@ export class GuildPlayer {
     return this.state === PlayerState.PAUSED;
   }
 
-  getState(): PlayerState {
-    return this.state;
-  }
-
-  getPausedTrack(): string | null {
-    return this.pausedTrack;
-  }
-
-  getCurrentTrack(): string | null {
+  getCurrentTrack(): Track | null {
     return this.currentTrack;
-  }
-
-  private async playTrack(url: string, signal: AbortSignal): Promise<void> {
-    const extractStream = this.extractor.stream(url, signal);
-    const encodedStream = this.encoder.encode(extractStream, signal);
-    
-    await this.voiceGateway.play(encodedStream);
   }
 
   shuffle(): void {
@@ -176,17 +149,45 @@ export class GuildPlayer {
     // Fisher-Yates shuffle algorithm
     for (let i = this.queue.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      const temp = this.queue[i];
+      const temp = this.queue[i]!;
       this.queue[i] = this.queue[j]!;
-      this.queue[j] = temp!;
+      this.queue[j] = temp;
     }
   }
 
-  remove(position: number): string | null {
+  remove(position: number): Track | null {
     if (position < 1 || position > this.queue.length) {
       return null;
     }
 
-    return this.queue.splice(position - 1, 1)[0] || null;
+    return this.queue.splice(position - 1, 1)[0] ?? null;
+  }
+
+  private handleTrackEnd(reason: TrackEndReason): void {
+    if (reason === 'replaced') {
+      return;
+    }
+
+    this.currentTrack = null;
+    this.state = PlayerState.IDLE;
+
+    if (this.suppressAdvance || reason === 'cleanup') {
+      this.suppressAdvance = false;
+      return;
+    }
+
+    this.start().catch((error) => {
+      this.onError?.(error instanceof Error ? error : new Error(String(error)));
+    });
+  }
+
+  /** A stuck track would hang the player forever; force the next track. */
+  private advanceAfterFailure(): void {
+    if (this.state === PlayerState.IDLE) {
+      return;
+    }
+    this.player.stopTrack().catch((error) => {
+      this.onError?.(error instanceof Error ? error : new Error(String(error)));
+    });
   }
 }

@@ -34,8 +34,8 @@ Status legend:
 | Config / startup validation | done | dotenv + hard checks: token length, cookies file readable, yt-dlp + ffmpeg on PATH; friendly failure messages. | — |
 | Slash commands (14) | done | ping, play, stop, skip, queue, clear, commands, search, nowplaying, pause, resume, shuffle, remove, prune. Dispatch via `handler/slash.ts`. | Behavior caveats in `known-constraints.md` (skip, resume). |
 | Command registration | done | Global sync by default; dev-guild sync with `NODE_ENV=development` + `DEV_GUILD_ID`; `CLEAR_GUILDS` cleanup flag. | — |
-| Audio pipeline | partial | yt-dlp → ffmpeg (opus 48k/2ch/128k) → @discordjs/voice; abort chain kills subprocesses; queue cap 20. | 5-min track ceiling, no auto-advance on skip, resume restarts track — `known-constraints.md` / `nice-to-have.md`. |
-| Multi-guild playback | partial | Per-guild players and queues are correct; `VoiceGateway` resolves the target guild as "first live connection", so concurrent multi-guild playback is unreliable. | `nice-to-have.md`. |
+| Audio pipeline | partial | Lavalink cutover (L2): `GuildPlayer` orchestrates a Shoukaku player via the domain `PlayerPort`; track-end auto-advance (F-6 fixed), native pause/resume (position kept), no track ceiling (F-7 fixed); queue cap 20. yt-dlp/ffmpeg files remain but only `/search` + ytsearch use the extractor until L3. Live smoke pending. | `lavalink-plan.md`. |
+| Multi-guild playback | partial | Shoukaku players are keyed per guild — the "first live connection" routing bug is structurally gone (L2). Concurrent two-guild playback not yet live-verified. | `lavalink-plan.md` L2 exit. |
 | Search | done | `/search` (1–20 results, dump-single-json) and `/play ytsearchN:query` resolve to first result. | — |
 | Idle timeout | done | 5-min inactivity → disconnect + embed notification to last text channel; 30s sweep. | — |
 | Presence | done | 30s rotation: current track title (yt-dlp --get-title) or server/channel stats. | Subprocess-per-refresh cost noted in `known-constraints.md`. |

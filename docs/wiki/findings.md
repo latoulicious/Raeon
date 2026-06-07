@@ -65,3 +65,10 @@ fixes are recorded in [resolutions.md](resolutions.md) under the same ID.
 - **F-11** `docker-compose.yml` (lavalink healthcheck) — CodeRabbit
   (minor) suggested removing the `Authorization` header from the
   `/version` healthcheck, claiming the endpoint is public.
+
+## 2026-06-07 — L2 CodeRabbit review
+
+- **F-12** `domain/guild-player.ts` exception handling — CodeRabbit
+  (critical) argued `end(loadFailed)` may not always follow `exception`
+  and the queue could hang; suggested treating `exception` as terminal
+  and advancing on it.

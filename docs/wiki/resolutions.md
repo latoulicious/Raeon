@@ -38,3 +38,11 @@ findings are unapproved in [nice-to-have.md](nice-to-have.md).
   `/version` was v3 behavior). Removing the header would make the
   healthcheck fail permanently. Header kept, `$$`-escaped so the
   password resolves in-container, not in compose interpolation.
+- **F-12** behavior rejected, wording fixed — per the lavaplayer
+  contract, fatal exceptions are followed by `end(loadFailed)` (which
+  auto-advances) and non-fatal exceptions leave the track playing;
+  advancing on `exception` would double-advance or skip a live track.
+  The hung-track case CodeRabbit worried about surfaces as `stuck`,
+  which the orchestrator force-stops. The PlayerPort comment and the
+  session log overclaimed "always follows" — both now state the
+  fatal/non-fatal split and the `stuck` coverage explicitly.

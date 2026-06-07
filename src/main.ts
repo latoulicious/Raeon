@@ -2,8 +2,6 @@ import { loadConfig } from './config/index.js';
 import { DiscordClient } from './infrastructure/discord-client.js';
 import { CommandManager } from './infrastructure/command-manager.js';
 import { YtdlpExtractor } from './infrastructure/yt-dlp.js';
-import { FfmpegEncoder } from './infrastructure/ffmpeg.js';
-import { VoiceGateway } from './infrastructure/voice-gateway.js';
 import { LavalinkClient } from './infrastructure/lavalink.js';
 import { PingService } from './application/services/ping.service.js';
 import { MusicService } from './application/services/music.service.js';
@@ -54,15 +52,13 @@ class Application {
     });
     this.commandManager = new CommandManager(this.discordClient.raw);
 
+    // Extractor only backs /search and the /play ytsearch path until L3
     const extractor = new YtdlpExtractor(config.ytdlpCookiesPath);
-    const encoder = new FfmpegEncoder();
-    const voiceGateway = new VoiceGateway();
 
     this.pingService = new PingService();
     this.musicService = new MusicService(
-      voiceGateway,
+      this.lavalinkClient,
       extractor,
-      encoder,
       async (guildId, textChannelId) => {
         try {
           const channel = await this.discordClient.raw.channels.fetch(textChannelId);
