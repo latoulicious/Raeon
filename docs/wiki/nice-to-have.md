@@ -28,8 +28,7 @@ user approval. Bugs with concrete evidence live in
   surface as commands.
 - **Full playlist queueing** — playlists currently resolve to a single
   track with an info notice (migration non-goal). Mind the queue cap.
-- **Persistent queues** — queue is in-memory and dies with the bot
-  process (see known-constraints).
+  *In progress: persistent-queue-plan.md Q4–Q6 (approved).*
 - Health endpoint for the bot (would need an HTTP server — see
   AGENTS.md constraint; needs approval).
 

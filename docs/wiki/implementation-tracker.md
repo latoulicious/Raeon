@@ -41,7 +41,8 @@ Status legend:
 | Idle timeout | done | 5-min inactivity → disconnect + embed notification to last text channel; 30s sweep. | — |
 | Presence | done | 30s rotation: current `Track.title` from resolve-time metadata (L3 — subprocess churn gone) or server/channel stats. | — |
 | Logging / metrics | partial | pino + optional fire-and-forget Postgres mirror; in-memory counters (`total_commands`, `active_players`, `track_load_failures`, `player_errors`) logged every 5 min. `cleanupOldLogs`, `getMetrics`, `logWithContext` are dead code (F-8). | Log retention + dead-code cleanup in `nice-to-have.md`. |
-| Database | partial | `logs` table auto-created at boot; no migrations; no business data. | Unbounded growth — `nice-to-have.md`. |
+| Database | partial | `logs` + `guild_sessions` tables auto-created at boot; no migrations. | `logs` unbounded growth — `nice-to-have.md`. |
+| Queue persistence | done | Q0–Q3 (2026-06-07): write-through `guild_sessions` snapshots (debounced ~1s via `GuildPlayer.onChange`), lazy restore on `/play` (merge) or `/resume` (revive into requester's channel), 24h stale sweep, `/stop`/idle delete, graceful shutdown preserves. Crash + graceful drills verified at Docker level; live `/resume` revive in Discord pending (checklist below). | — |
 | Message/reaction handlers | reserved | Events wired, handlers are no-op stubs. | Define a use case first. |
 | Dependencies | done | Current as of 2026-06-07: discord.js 14.26.4, shoukaku 4.3.0, pino 10.3.1, TS 5.9.3 + NodeNext, @types/node 24, engines `>=24`. `npm audit` clean — the voice/opus chain and its tar advisories (F-10) are gone (L4). | — |
 | Docker | done | Multi-stage `node:24-alpine` Dockerfile (no apk toolchain, non-root `node` user, no EXPOSE/healthcheck); compose = bot + lavalink + postgres, bot gated on both healthchecks, dead `init.sql`/`cookies.txt` mounts gone (L5, e2e-verified 2026-06-07). F-1..F-4, F-9 closed in `resolutions.md`. | — |
@@ -72,3 +73,12 @@ UX refresh (U3) additions:
       ephemeral error embed
 - [ ] a dead track posts one Playback Error embed and the queue
       advances
+
+Persistent queue (Q3) additions:
+
+- [ ] `docker kill` mid-playback → `compose up` → `/resume` rejoins the
+      requester's channel and replays the interrupted track from 0:00
+      with the queue intact + Session Restored embed
+- [ ] `/play` in a guild with a pending session queues restored tracks
+      first, requested track after, and posts the restore embed
+- [ ] `/stop` then restart → no session restored

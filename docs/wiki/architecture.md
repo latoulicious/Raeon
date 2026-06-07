@@ -45,6 +45,8 @@ src/
     embed.ts                 EmbedService: every user-facing embed
     logger.ts                pino singleton + in-memory metrics + DB mirror
     database-logger.ts       pg Pool sink, logs table auto-create, fire-and-forget
+    queue-store.ts           guild_sessions persistence: own small pg Pool,
+                             raw SQL, no-op without DATABASE_URL
     startup-validator.ts     token + Lavalink password/port checks
     timeout.ts               TimeoutService: 5-min idle disconnect, 30s sweep
   handler/
@@ -90,6 +92,27 @@ Event contract (the hidden contract — see AGENTS.md):
 `GuildPlayer` states: `IDLE → PLAYING ⇄ PAUSED`. Pause/resume are native
 Lavalink `setPaused` — position is preserved. No per-track timeout.
 
+### Queue persistence (Q0–Q3, 2026-06-07)
+
+Write-through: `GuildPlayer`'s optional `onChange` callback fires after
+every queue/current-track mutation (including the auto-advance shift);
+`MusicService` debounces it (~1s per guild) into a whole-row upsert of
+`[currentTrack, queue]` to the `guild_sessions` table via
+`QueueStore` (own small pg Pool, raw SQL, table auto-created at boot —
+no-op without `DATABASE_URL`). Writes are fire-and-forget; a dead DB
+never blocks playback.
+
+Restore is lazy: boot stages persisted rows into a `pendingSessions`
+map (rows >24h old or empty are deleted instead); no auto-rejoin. The
+next `/play` in that guild enqueues the restored tracks first and the
+requested track after them; `/resume` with no live player revives the
+session into the requester's current voice channel. Both paths post a
+"Session Restored" info embed, replay the interrupted track from 0:00
+(no position tracking), and consume the pending entry. `/stop` and the
+idle timeout delete the row; graceful shutdown flushes pending
+snapshots and preserves it (`cleanup()` tears players down without
+deleting sessions).
+
 Playlist URLs resolve to a single track: `selectedTrack` if set, else
 the `v=` param match, else the playlist head (`/play` sends an info
 notice; full playlist support is a non-goal).
@@ -104,6 +127,10 @@ pause, resume, shuffle, remove, prune` — wired in `main.ts` into a
 `ytsearchN:` count syntax is normalized). `/skip` advances via the end
 event; `/stop` disconnects. Embeds show `Track` metadata (title, author,
 duration) resolved at load time.
+
+`/resume` has two disjoint meanings: with a paused live player it
+unpauses; with no live player and a pending persisted session it
+revives that session (see queue persistence above).
 
 ### Embed and error conventions (UX refresh U0–U2, 2026-06-07)
 
@@ -162,12 +189,16 @@ Boot (`bootstrap()` in `main.ts`):
 3. construct Application — `LavalinkClient` before login so the
    Shoukaku connector hooks gateway events; node WS connects after the
    Discord client is ready
-4. `client.login`, register slash commands, start presence (30s) and
+4. `queueStore.init()` (guild_sessions auto-create; no-op warning
+   without `DATABASE_URL`) → `musicService.loadPendingSessions()`
+   (stale/empty rows swept, rest staged for lazy restore)
+5. `client.login`, register slash commands, start presence (30s) and
    metrics (5 min) intervals
 
 Shutdown (SIGINT/SIGTERM/unhandledRejection/uncaughtException, 10s force
-exit): clear intervals → `musicService.cleanup()` (disconnect all guilds)
-→ destroy Discord client → close DB pool.
+exit): clear intervals → `musicService.cleanup()` (flush pending
+snapshots, tear down all guilds *without* deleting their sessions) →
+destroy Discord client → close DB pool → close queue store pool.
 
 ## Deployment
 

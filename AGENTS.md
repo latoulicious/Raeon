@@ -54,9 +54,12 @@ over:
   it.
 * **Secrets never enter git.** `.env` is gitignored; `DISCORD_TOKEN`
   and `LAVALINK_PASSWORD` must never be committed or logged.
-* **PostgreSQL is a log sink only.** No business data lives in the
-  database. The `logs` table is auto-created at boot; there is no
-  migration system. Do not add business tables without approval.
+* **PostgreSQL holds logs and guild sessions only.** The `logs` table
+  (log mirror) and the `guild_sessions` table (persistent queue
+  snapshots) are auto-created at boot; there is no migration system.
+  The DB stays optional — without `DATABASE_URL`, log mirroring and
+  queue persistence are no-ops. Do not add further tables without
+  approval.
 * **Queue cap is 20 tracks; idle disconnect is 5 minutes.** Product
   decisions — change only when explicitly asked.
 

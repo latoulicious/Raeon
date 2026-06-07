@@ -22,7 +22,7 @@ updated: 2026-06-07
 | `LAVALINK_PASSWORD` | yes (non-empty) | — | bot ↔ node auth; also interpolated into the lavalink compose service |
 | `LAVALINK_HOST` | no | `localhost` | node address (compose sets `lavalink` in-stack) |
 | `LAVALINK_PORT` | no | `2333` | node port; validated 1–65535 when set |
-| `DATABASE_URL` | no | — | PostgreSQL log sink; logging disabled without it (compose sets the in-stack URL) |
+| `DATABASE_URL` | no | — | PostgreSQL log sink + persistent queue sessions; both disabled without it (compose sets the in-stack URL) |
 | `DB_PASSWORD` | compose only | — | interpolated into the postgres service and the bot's in-stack `DATABASE_URL` |
 | `LOG_LEVEL` | no | `info` | pino level |
 | `NODE_ENV` | no | — | `development` → pino-pretty + guild command sync; anything else → JSON logs + global sync (compose forces `production`) |

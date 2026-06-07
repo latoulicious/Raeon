@@ -57,3 +57,17 @@ F-13 fix `71af53c`, U2 `d407f51`, U3 docs sync. Closed F-13
 (user-reported `/queue` overflow found mid-implementation). Live
 screenshot pass + smoke additions tracked in
 implementation-tracker.md.
+
+## Persistent queue & playlists Q0–Q6 (approved 2026-06-07)
+
+[persistent-queue-plan.md](persistent-queue-plan.md) — both bands
+approved: queue survives bot death via a `guild_sessions` table
+(write-through snapshots, lazy restore, restart from 0:00), and full
+playlist queueing for pure playlist URLs (fill to cap, "Queued N of
+M"). First business table — the AGENTS.md "log sink only" constraint
+was rewritten at Q3.
+
+Progress: **Q0–Q3 shipped 2026-06-07** — Q0 `d105feb`, Q1 `be68f77`,
+Q2 `f311782`, Q3 docs sync. Crash + graceful drills verified at the
+Docker level; live Discord revive smoke tracked in
+implementation-tracker.md. Q4–Q6 (playlists) next.

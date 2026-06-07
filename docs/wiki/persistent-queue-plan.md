@@ -8,7 +8,7 @@ tags:
   - raeon
   - plan
 type: plan
-status: draft
+status: in-progress
 updated: 2026-06-07
 ---
 
@@ -17,6 +17,14 @@ updated: 2026-06-07
 Two queue features in one plan: persistence across bot death (Q0–Q3)
 and full playlist queueing (Q4–Q6). The bands are independent — either
 can land first; playlist is the smaller diff.
+
+> **Progress (2026-06-07):** Q0–Q3 shipped — Q0 `d105feb`, Q1
+> `be68f77`, Q2 `f311782`, Q3 docs sync. Crash + graceful drills
+> verified at Docker level; live `/resume` revive smoke tracked in
+> implementation-tracker.md. One deviation: `MusicService.cleanup()`
+> was split from `disconnect()` (teardown without row deletion) so
+> graceful shutdown preserves sessions — the plan implied it but the
+> shared code path made it an explicit change.
 
 ## Part 1 — Persistent queue (Q0–Q3)
 

@@ -43,11 +43,18 @@ See git history of this file and `lavalink-plan.md` for what they were.
 
 ## Playback behavior
 
-- **Queue is in-memory and bot-side.** Lavalink has no queue concept;
-  `GuildPlayer` holds the `Track[]`. A bot restart loses every queue
-  (the node keeps streaming the current track until told otherwise —
-  `musicService.cleanup()` disconnects all guilds on graceful
-  shutdown).
+- **Queue persists across bot death, but lazily and from 0:00.**
+  Lavalink has no queue concept; `GuildPlayer` holds the `Track[]` and
+  mirrors `[currentTrack, queue]` into the `guild_sessions` table on
+  every mutation (debounced ~1s — a crash loses at most the last ~1s of
+  changes). On boot, persisted sessions are staged in memory; nothing
+  auto-rejoins. The next `/play` queues the restored tracks first, or
+  `/resume` revives the session into the requester's current voice
+  channel. The interrupted track replays from the start (no position
+  tracking). Sessions older than 24h (or empty) are deleted at boot;
+  `/stop` and the idle timeout clear them; graceful shutdown preserves
+  them. Without `DATABASE_URL`, persistence is a logged no-op and a
+  restart loses every queue as before.
 - **Queue cap 20, idle disconnect 5 minutes** (sweep every 30s). Product
   decisions in `music.service.ts` / `timeout.ts`.
 - **Playlists resolve to one track.** `selectedTrack` → `v=` param
@@ -75,13 +82,16 @@ See git history of this file and `lavalink-plan.md` for what they were.
 ## Logging / persistence
 
 - **PostgreSQL is optional and fire-and-forget.** Without `DATABASE_URL`
-  the bot runs with console logs only. With it, log writes are
-  non-blocking and silently dropped when the pool is down (max 5
-  reconnect attempts, exponential backoff capped at 60s). Do not treat
-  the `logs` table as a reliable audit trail.
-- **No migration system.** The `logs` table is `CREATE TABLE IF NOT
-  EXISTS` at boot. `cleanupOldLogs()` exists but nothing calls it — the
-  table grows unbounded (see nice-to-have).
+  the bot runs with console logs only and no queue persistence. With
+  it, log writes are non-blocking and silently dropped when the pool is
+  down (max 5 reconnect attempts, exponential backoff capped at 60s),
+  and session upserts/deletes log-and-swallow failures — a dead DB can
+  never block playback. Do not treat the `logs` table as a reliable
+  audit trail.
+- **No migration system.** The `logs` and `guild_sessions` tables are
+  `CREATE TABLE IF NOT EXISTS` at boot (separate small pool for
+  sessions in `queue-store.ts`). `cleanupOldLogs()` exists but nothing
+  calls it — the `logs` table grows unbounded (see nice-to-have).
 - **Metrics are in-memory only** and reset on restart; they are logged
   every 5 minutes, not exported.
 - **Postgres bakes its password at first init.** Changing `DB_PASSWORD`
