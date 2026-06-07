@@ -4,6 +4,7 @@ import { CommandManager } from './infrastructure/command-manager.js';
 import { YtdlpExtractor } from './infrastructure/yt-dlp.js';
 import { FfmpegEncoder } from './infrastructure/ffmpeg.js';
 import { VoiceGateway } from './infrastructure/voice-gateway.js';
+import { LavalinkClient } from './infrastructure/lavalink.js';
 import { PingService } from './application/services/ping.service.js';
 import { MusicService } from './application/services/music.service.js';
 import { handleSlashCommand } from './handler/slash.js';
@@ -32,6 +33,7 @@ const logger = appLogger.getLogger('main');
 
 class Application {
   private readonly discordClient: DiscordClient;
+  private readonly lavalinkClient: LavalinkClient;
   private readonly pingService: PingService;
   private readonly musicService: MusicService;
   private readonly commandManager: CommandManager;
@@ -44,6 +46,12 @@ class Application {
     this.abortController = new AbortController();
 
     this.discordClient = new DiscordClient();
+    // Must be constructed before login so the connector hooks gateway events
+    this.lavalinkClient = new LavalinkClient(this.discordClient.raw, {
+      host: config.lavalinkHost,
+      port: config.lavalinkPort,
+      password: config.lavalinkPassword,
+    });
     this.commandManager = new CommandManager(this.discordClient.raw);
 
     const extractor = new YtdlpExtractor(config.ytdlpCookiesPath);

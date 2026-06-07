@@ -10,6 +10,9 @@ const require = createRequire(import.meta.url);
 export interface Config {
   discordToken: string;
   ytdlpCookiesPath: string;
+  lavalinkHost: string;
+  lavalinkPort: number;
+  lavalinkPassword: string;
 }
 
 export async function loadConfig(): Promise<Config> {
@@ -33,8 +36,19 @@ export async function loadConfig(): Promise<Config> {
     throw new Error(`Cookies file not found at: ${ytdlpCookiesPath}`);
   }
 
+  const lavalinkHost = process.env.LAVALINK_HOST || 'localhost';
+  const lavalinkPort = Number(process.env.LAVALINK_PORT || 2333);
+  const lavalinkPassword = process.env.LAVALINK_PASSWORD;
+
+  if (!lavalinkPassword) {
+    throw new Error('LAVALINK_PASSWORD environment variable is required');
+  }
+
   return {
     discordToken,
     ytdlpCookiesPath,
+    lavalinkHost,
+    lavalinkPort,
+    lavalinkPassword,
   };
 }
