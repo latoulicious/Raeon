@@ -42,7 +42,7 @@ async function execute(
       return;
     }
 
-    const embed = EmbedService.createSearchEmbed(query, results, limit, interaction.client);
+    const embed = EmbedService.createSearchEmbed(query, results, limit, interaction.user);
 
     await interaction.followUp({ embeds: [embed] });
     logger.info({ query, resultCount: results.length, userId: interaction.user.id, guildId: interaction.guildId, commandName: 'search' }, 'Search completed successfully');

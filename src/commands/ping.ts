@@ -11,7 +11,7 @@ async function execute(
   services: SlashCommandServices,
 ): Promise<void> {
   const response = services.ping.ping();
-  const embed = EmbedService.createPingEmbed(response.message, response.timestamp);
+  const embed = EmbedService.createPingEmbed(response.message);
   await interaction.reply({ embeds: [embed] });
 }
 

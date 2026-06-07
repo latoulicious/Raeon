@@ -27,8 +27,7 @@ async function execute(
     queue,
     currentTrack,
     isPaused,
-    isPlaying,
-    interaction.client
+    isPlaying
   );
 
   await interaction.followUp({ embeds: [embed] });

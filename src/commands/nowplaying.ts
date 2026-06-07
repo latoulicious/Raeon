@@ -27,13 +27,13 @@ async function execute(
   const queue = services.music.getQueue(guildId);
 
   if (!isPlaying && !isPaused) {
-    const embed = EmbedService.createEmptyQueueEmbed(interaction.client);
+    const embed = EmbedService.createEmptyQueueEmbed();
     await interaction.followUp({ embeds: [embed] });
     return;
   }
 
   if (!currentTrack) {
-    const embed = EmbedService.createEmptyQueueEmbed(interaction.client);
+    const embed = EmbedService.createEmptyQueueEmbed();
     await interaction.followUp({ embeds: [embed] });
     return;
   }
@@ -42,8 +42,7 @@ async function execute(
     currentTrack,
     isPaused,
     queue.length,
-    interaction.user,
-    interaction.client
+    interaction.user
   );
 
   await interaction.followUp({ embeds: [embed] });

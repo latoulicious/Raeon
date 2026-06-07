@@ -33,8 +33,7 @@ export class EmbedService {
     track: Track,
     isPaused: boolean,
     queueLength: number,
-    user: User,
-    client: Client
+    user: User
   ): EmbedBuilder {
     const embed = this.createBaseEmbed('Now Playing', isPaused ? this.COLORS.WARNING : this.COLORS.ACCENT)
       .setDescription(`**[${track.title}](${track.uri})**\nby ${track.author}`)
@@ -75,8 +74,7 @@ export class EmbedService {
     queue: readonly Track[],
     currentTrack: Track | null,
     isPaused: boolean,
-    isPlaying: boolean,
-    client: Client
+    isPlaying: boolean
   ): EmbedBuilder {
     const embed = this.createBaseEmbed('Music Queue');
 
@@ -121,8 +119,8 @@ export class EmbedService {
     return embed;
   }
 
-  static createEmptyQueueEmbed(client: Client): EmbedBuilder {
-    return this.createBaseEmbed('Now Playing', this.COLORS.INFO)
+  static createEmptyQueueEmbed(): EmbedBuilder {
+    return this.createBaseEmbed('Nothing Playing', this.COLORS.INFO)
       .setDescription('Nothing is currently playing')
       .setFooter({ text: 'Use /play to start playing music' });
   }
@@ -173,16 +171,30 @@ export class EmbedService {
     track: Track,
     queueLength: number,
     user: User,
-    client: Client
+    playlistNotice?: string | null
   ): EmbedBuilder {
-    const trackLine = this.formatTrackLine(track);
+    const nowPlaying = queueLength === 0;
+    const embed = this.createSuccessEmbed(
+      nowPlaying ? 'Now Playing' : 'Queued',
+      this.formatTrackLine(track),
+      user
+    ).setURL(track.uri);
 
-    const description = queueLength === 0
-      ? `**Now playing**\n${trackLine}`
-      : `**Song added to queue!**\nQueue: ${queueLength} song${queueLength === 1 ? '' : 's'} remaining\nAdded: ${trackLine}`;
+    if (!nowPlaying) {
+      embed.addFields({
+        name: 'Position in Queue',
+        value: `${queueLength}`,
+        inline: true
+      });
+    }
 
-    const embed = this.createSuccessEmbed('Music Player', description, user)
-      .setURL(track.uri);
+    if (playlistNotice) {
+      embed.addFields({
+        name: 'Playlist',
+        value: playlistNotice,
+        inline: false
+      });
+    }
 
     const thumbnailUrl = this.trackThumbnail(track);
     if (thumbnailUrl) {
@@ -256,30 +268,22 @@ export class EmbedService {
       });
   }
 
-  static createSearchEmbed(query: string, results: readonly Track[], limit: number, client: Client): EmbedBuilder {
-    const embed = this.createBaseEmbed(`Search Results for "${query}"`, this.COLORS.INFO)
-      .setDescription(`Found ${results.length} result${results.length === 1 ? '' : 's'} for your search`)
+  static createSearchEmbed(query: string, results: readonly Track[], limit: number, user: User): EmbedBuilder {
+    const resultList = results
+      .map((track, index) => `${index + 1}. ${this.formatTrackLine(track)}`)
+      .join('\n');
+
+    return this.createBaseEmbed(`Search Results for "${query}"`, this.COLORS.INFO)
+      .setDescription(resultList)
       .setFooter({
-        text: `Use /play with the URL or try /play ytsearch1:"song name" for direct search • Results: ${results.length}/${limit}`
+        text: `${results.length}/${limit} results • Requested by ${user.tag}`,
+        iconURL: user.displayAvatarURL()
       });
-
-    results.forEach((track, index) => {
-      embed.addFields({
-        name: `${index + 1}. ${track.title}`,
-        value: `**${track.author}** | **${this.formatTrackDuration(track)}**\n[Click to play](${track.uri})\n\`/play ${track.uri}\``,
-        inline: false
-      });
-    });
-
-    return embed;
   }
 
-  static createPingEmbed(latency: string, timestamp: number): EmbedBuilder {
-    return this.createBaseEmbed('Pong! 🏓', this.COLORS.INFO)
-      .addFields(
-        { name: 'Status', value: latency, inline: true },
-        { name: 'Timestamp', value: new Date(timestamp).toLocaleString(), inline: true }
-      );
+  static createPingEmbed(latency: string): EmbedBuilder {
+    return this.createBaseEmbed('Ping', this.COLORS.INFO)
+      .addFields({ name: 'Status', value: latency, inline: true });
   }
 
   static createTimeoutEmbed(): EmbedBuilder {

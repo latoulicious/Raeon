@@ -76,15 +76,10 @@ async function execute(
     await services.music.play(guildId, voiceChannelId, textChannelId, track);
     const queue = services.music.getQueue(guildId);
 
-    const embed = EmbedService.createPlayEmbed(track, queue.length, interaction.user, interaction.client);
+    const embed = EmbedService.createPlayEmbed(track, queue.length, interaction.user, playlistNotice);
 
     logger.info({ guildId, title: track.title, uri: track.uri, userId: interaction.user.id, commandName: 'play' }, 'Play command executed successfully');
     await interaction.followUp({ embeds: [embed] });
-
-    if (playlistNotice) {
-      const noticeEmbed = EmbedService.createInfoEmbed('Playlist', playlistNotice, interaction.user);
-      await interaction.followUp({ embeds: [noticeEmbed] });
-    }
   } catch (error) {
     logger.error({ guildId, url, error, userId: interaction.user.id, commandName: 'play' }, 'Error playing music');
     
