@@ -1,5 +1,5 @@
 ---
-title: "Persistent Queue Plan"
+title: "Persistent Queue & Playlist Plan"
 aliases:
   - "Raeon Persistent Queue Plan"
 tags:
@@ -12,7 +12,13 @@ status: draft
 updated: 2026-06-07
 ---
 
-# Persistent Queue Plan (Q0–Q3)
+# Persistent Queue & Playlist Plan (Q0–Q6)
+
+Two queue features in one plan: persistence across bot death (Q0–Q3)
+and full playlist queueing (Q4–Q6). The bands are independent — either
+can land first; playlist is the smaller diff.
+
+## Part 1 — Persistent queue (Q0–Q3)
 
 Goal: the queue survives a bot death. Today the queue is in-memory and
 dies with the process (known-constraints); a crash mid-playback loses
@@ -127,6 +133,67 @@ Lavalink `encoded` blob replays as-is.
   session log.
 - Exit: docs match; both drills pass.
 
+## Part 2 — Full playlist queueing (Q4–Q6)
+
+Today a playlist-resolving URL queues only the linked video plus a
+"Playlists are not supported yet" field (L3 behavior). The resolver
+already receives **every** playlist track from Lavalink and discards
+them (`lavalink.ts` PLAYLIST branch keeps one + a count) — full
+playlist support is plumbing, not new resolution work.
+
+Decisions taken at drafting (user, 2026-06-07):
+
+- **Pure playlist URLs only.** The whole list queues only for real
+  playlist links (path `/playlist`, e.g.
+  `youtube.com/playlist?list=...`). Watch URLs that merely carry a
+  `&list=` param (the casually-copied case) keep today's behavior:
+  queue the linked video only. `youtu.be/<id>?list=...` counts as a
+  watch URL.
+- **Cap stays 20, fill to cap.** Longer playlists queue the first
+  tracks until the queue is full; the reply says "Queued N of M".
+
+### Target design
+
+- `ResolveResult` playlist variant gains the full `tracks: Track[]`
+  (selected track and `playlistName` stay; `totalTracks` becomes
+  `tracks.length` at the call site).
+- Intent rule lives in `play.ts` next to the existing `ytsearchN:`
+  normalization: identifier path contains `/playlist` → bulk, else
+  single (current selection logic untouched).
+- `MusicService` gains a bulk enqueue path that respects the cap and
+  returns `{ queued, dropped }` — the existing single-track `play()`
+  contract is untouched.
+- Play embed for the bulk case: title "Queued Playlist", playlist name
+  + "Queued N of M tracks" field (replaces the not-supported notice for
+  pure playlist URLs; watch+list URLs keep the current notice). The
+  F-13 list clamps already cover `/queue` display.
+- Persistence interplay: bulk enqueue fires the same `onChange`
+  write-through — nothing extra.
+
+### Q4 — Resolver carries playlist tracks
+
+- `ResolveResult` + `lavalink.ts` PLAYLIST branch return the full
+  track array; `play.ts`/`music.service.ts` compile against the new
+  shape with behavior unchanged.
+- Exit: build clean; live REST check shows a pure playlist URL
+  resolving with all tracks present.
+
+### Q5 — Bulk enqueue + embeds
+
+- Intent rule in `play.ts`; `MusicService` bulk path (cap-aware);
+  "Queued N of M" embed copy.
+- Exit: live dev-guild — pure playlist URL fills the queue to cap with
+  honest copy; watch+list URL still queues one track + notice.
+
+### Q6 — Verify + docs
+
+- Smoke: playlist > 20 tracks (fill to cap), playlist ≤ cap remainder,
+  watch+list single, `youtu.be` + list single, mix-list URLs
+  (`selectedTrack: -1` case from L3).
+- Docs: architecture.md (resolve pipeline note), known-constraints or
+  nice-to-have prune, implementation-tracker.md, session log.
+- Exit: docs match; smoke set passes.
+
 ## Non-goals
 
 - Position resume (decided out — restart from 0:00).
@@ -135,7 +202,10 @@ Lavalink `encoded` blob replays as-is.
   simply has no persistence).
 - Any change to playback semantics, the queue cap, or `PlayerPort`
   (the lazy + from-zero decisions mean the interface needs nothing
-  new).
+  new; playlist fill-to-cap keeps the cap at 20).
+- Cap raise, playlist pagination/continuation ("queue the next 20"),
+  and YouTube *mixes* as full lists (infinite/generated — they stay on
+  the single-track path via the watch-URL rule).
 
 ## Risks
 
@@ -152,3 +222,9 @@ Lavalink `encoded` blob replays as-is.
   the queue-full message already names `/clear` as the out.
 - Debounced writes lose at most ~1s of mutations on a crash —
   acceptable for a music queue.
+- `ResolveResult` is an internal contract but typed across three
+  modules — Q4 changes its playlist shape; all consumers are
+  compile-checked in the same commit.
+- Bulk enqueue of a 20-track restore *plus* a 20-track playlist meets
+  the cap logic in two places — the `{ queued, dropped }` return must
+  be honest in both paths so the embed never overclaims.
