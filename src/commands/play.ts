@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { MusicServiceError } from '../application/services/music.service.js';
 import { appLogger } from '../infrastructure/logger.js';
@@ -19,20 +19,22 @@ async function execute(
   interaction: ChatInputCommandInteraction,
   services: SlashCommandServices,
 ): Promise<void> {
-  await interaction.deferReply();
-
-  if (!interaction.inGuild()) {
-    await interaction.followUp('This command can only be used in a server!');
+  if (!interaction.inGuild() || !interaction.guild) {
+    const embed = EmbedService.createErrorEmbed('Play', 'This command can only be used in a server.', interaction.user);
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
   }
 
-  const member = await interaction.guild?.members.fetch(interaction.user.id);
-  const voiceChannel = member?.voice.channel;
-  
+  // Voice state is cached via the GuildVoiceStates intent; no member fetch needed.
+  const voiceChannel = interaction.guild.voiceStates.cache.get(interaction.user.id)?.channel;
+
   if (!voiceChannel) {
-    await interaction.followUp('You must be in a voice channel to use this command!');
+    const embed = EmbedService.createErrorEmbed('Play', 'You must be in a voice channel to use this command.', interaction.user);
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
   }
+
+  await interaction.deferReply();
 
   const url = interaction.options.getString('url', true);
   const guildId = interaction.guildId;
@@ -83,14 +85,12 @@ async function execute(
   } catch (error) {
     logger.error({ guildId, url, error, userId: interaction.user.id, commandName: 'play' }, 'Error playing music');
     
-    if (error instanceof MusicServiceError) {
-      const embed = EmbedService.createErrorEmbed('Error', error.userFriendlyMessage, interaction.user);
-      await interaction.followUp({ embeds: [embed] });
-    } else {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to play the song. Please check the URL and try again.';
-      const embed = EmbedService.createErrorEmbed('Error', errorMessage, interaction.user);
-      await interaction.followUp({ embeds: [embed] });
-    }
+    // Unknown errors stay in the logs; the channel only sees a generic message.
+    const message = error instanceof MusicServiceError
+      ? error.userFriendlyMessage
+      : 'Failed to play the song. Please try again later.';
+    const embed = EmbedService.createErrorEmbed('Play', message, interaction.user);
+    await interaction.followUp({ embeds: [embed] });
   }
 }
 

@@ -14,15 +14,21 @@ export class MusicServiceError extends Error {
 }
 
 export type TimeoutNotificationCallback = (guildId: string, textChannelId: string) => Promise<void>;
+export type PlaybackErrorNotificationCallback = (guildId: string, textChannelId: string, track: Track) => Promise<void>;
+
+/** Minimum gap between playback-error embeds per guild, so cascading failures send one message. */
+const ERROR_NOTIFY_THROTTLE_MS = 30_000;
 
 export class MusicService {
   private readonly players = new Map<string, GuildPlayer>();
   private readonly timeoutService: TimeoutService;
   private readonly lastTextChannelIds = new Map<string, string>();
+  private readonly lastErrorNotifyAt = new Map<string, number>();
 
   constructor(
     private readonly lavalink: LavalinkClient,
     private readonly onTimeoutNotification?: TimeoutNotificationCallback,
+    private readonly onPlaybackErrorNotification?: PlaybackErrorNotificationCallback,
   ) {
     this.timeoutService = new TimeoutService(async (guildId) => {
       const player = this.players.get(guildId);
@@ -71,13 +77,18 @@ export class MusicService {
       if (player && player.getQueue().length >= maxQueueSize) {
         throw new MusicServiceError(
           'Queue is full',
-          `🎵 **Queue Full**: The queue has reached its maximum limit of ${maxQueueSize} songs. Use /clear to remove all songs or wait for some to finish playing.`
+          `The queue has reached its maximum limit of ${maxQueueSize} songs. Use /clear to remove all songs or wait for some to finish playing.`
         );
       }
 
       if (!player) {
         const port = await this.lavalink.join(guildId, voiceChannelId);
-        player = new GuildPlayer(guildId, port, (error) => this.handlePlaybackError(guildId, error));
+        player = new GuildPlayer(
+          guildId,
+          port,
+          (error) => this.handlePlaybackError(guildId, error),
+          (failedTrack) => this.notifyTrackFailure(guildId, failedTrack),
+        );
         this.players.set(guildId, player);
         logger.info({ guildId }, 'Created new guild player');
       }
@@ -125,6 +136,7 @@ export class MusicService {
   async disconnect(guildId: string): Promise<void> {
     this.timeoutService.removeGuild(guildId);
     this.lastTextChannelIds.delete(guildId);
+    this.lastErrorNotifyAt.delete(guildId);
     const player = this.players.get(guildId);
     if (player) {
       try {
@@ -220,6 +232,28 @@ export class MusicService {
     appLogger.incrementPlayerErrors();
   }
 
+  /**
+   * Tell the guild's last text channel a track died. Throttled per guild
+   * and fire-and-forget so a dead channel can never break advancement.
+   */
+  private notifyTrackFailure(guildId: string, track: Track): void {
+    const textChannelId = this.lastTextChannelIds.get(guildId);
+    if (!textChannelId || !this.onPlaybackErrorNotification) {
+      return;
+    }
+
+    const now = Date.now();
+    const last = this.lastErrorNotifyAt.get(guildId) ?? 0;
+    if (now - last < ERROR_NOTIFY_THROTTLE_MS) {
+      return;
+    }
+    this.lastErrorNotifyAt.set(guildId, now);
+
+    this.onPlaybackErrorNotification(guildId, textChannelId, track).catch((error) => {
+      logger.error({ guildId, textChannelId, error }, 'Failed to send playback error notification');
+    });
+  }
+
   private handleServiceError(error: unknown): MusicServiceError {
     if (error instanceof MusicServiceError) {
       return error;
@@ -228,7 +262,7 @@ export class MusicService {
     if (error instanceof LavalinkError) {
       return new MusicServiceError(
         'Lavalink request failed',
-        '🎵 **Playback Service Error**: The audio service could not load that track. Please try again in a moment.',
+        'The audio service could not load that track. Please try again in a moment.',
         error
       );
     }
@@ -236,7 +270,7 @@ export class MusicService {
     if (error instanceof GuildPlayerError) {
       return new MusicServiceError(
         'Guild player error',
-        '🎵 **Playback Error**: An error occurred during playback. Please try stopping and starting again.',
+        'An error occurred during playback. Please try stopping and starting again.',
         error
       );
     }
@@ -245,7 +279,7 @@ export class MusicService {
       if (error.message.includes('voice')) {
         return new MusicServiceError(
           'Voice connection error',
-          '🔊 **Voice Connection Failed**: Unable to connect to the voice channel. Make sure I have permission to join and speak in the channel.',
+          'Unable to connect to the voice channel. Make sure I have permission to join and speak in the channel.',
           error
         );
       }
@@ -253,7 +287,7 @@ export class MusicService {
 
     return new MusicServiceError(
       'Unknown error',
-      '❌ **Unexpected Error**: An unexpected error occurred. Please try again later.',
+      'An unexpected error occurred. Please try again later.',
       error instanceof Error ? error : new Error(String(error))
     );
   }

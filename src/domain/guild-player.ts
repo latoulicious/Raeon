@@ -53,6 +53,8 @@ export class GuildPlayer {
     private readonly guildId: string,
     private readonly player: PlayerPort,
     private readonly onError?: (error: Error) => void,
+    /** Fired when a track dies (loadFailed/stuck); advancement is unaffected. */
+    private readonly onTrackFailed?: (track: Track) => void,
   ) {
     this.player.onTrackEnd((reason) => this.handleTrackEnd(reason));
     this.player.onTrackStuck(() => this.advanceAfterFailure());
@@ -168,8 +170,13 @@ export class GuildPlayer {
       return;
     }
 
+    const endedTrack = this.currentTrack;
     this.currentTrack = null;
     this.state = PlayerState.IDLE;
+
+    if (reason === 'loadFailed' && endedTrack) {
+      this.onTrackFailed?.(endedTrack);
+    }
 
     if (this.suppressAdvance || reason === 'cleanup') {
       this.suppressAdvance = false;
@@ -185,6 +192,9 @@ export class GuildPlayer {
   private advanceAfterFailure(): void {
     if (this.state === PlayerState.IDLE) {
       return;
+    }
+    if (this.currentTrack) {
+      this.onTrackFailed?.(this.currentTrack);
     }
     this.player.stopTrack().catch((error) => {
       this.onError?.(error instanceof Error ? error : new Error(String(error)));

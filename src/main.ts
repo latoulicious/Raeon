@@ -64,6 +64,17 @@ class Application {
         } catch (error) {
           logger.error({ guildId, textChannelId, error }, 'Failed to send timeout notification');
         }
+      },
+      async (guildId, textChannelId, track) => {
+        try {
+          const channel = await this.discordClient.raw.channels.fetch(textChannelId);
+          if (channel?.isTextBased()) {
+            const embed = EmbedService.createTrackFailedEmbed(track);
+            await (channel as any).send({ embeds: [embed] });
+          }
+        } catch (error) {
+          logger.error({ guildId, textChannelId, error }, 'Failed to send playback error notification');
+        }
       }
     );
 

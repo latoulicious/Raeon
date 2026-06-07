@@ -282,6 +282,13 @@ export class EmbedService {
       .addFields({ name: 'Status', value: latency, inline: true });
   }
 
+  static createTrackFailedEmbed(track: Track): EmbedBuilder {
+    return this.createErrorEmbed(
+      'Playback Error',
+      `Could not play ${this.formatTrackLine(track)}. Skipping to the next track.`
+    );
+  }
+
   static createTimeoutEmbed(): EmbedBuilder {
     return this.createBaseEmbed('Idle Timeout', this.COLORS.WARNING)
       .setDescription('Disconnected from voice channel due to 5 minutes of inactivity.')

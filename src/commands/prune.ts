@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, TextChannel } from 'discord.js';
 import type { SlashCommand, SlashCommandServices } from '../handler/slash.js';
 import { appLogger } from '../infrastructure/logger.js';
 import { EmbedService } from '../infrastructure/embed.js';
@@ -20,15 +20,16 @@ async function execute(
   interaction: ChatInputCommandInteraction,
   services: SlashCommandServices,
 ): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
-
   const amount = interaction.options.getInteger('amount') ?? 50;
   const channel = interaction.channel;
 
   if (!channel || !channel.isTextBased()) {
-    await interaction.followUp('This command can only be used in text channels!');
+    const embed = EmbedService.createErrorEmbed('Prune', 'This command can only be used in text channels.', interaction.user);
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     return;
   }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const messages = await channel.messages.fetch({ limit: 100 });
@@ -38,7 +39,8 @@ async function execute(
     const toDelete = botMessages.first(amount);
 
     if (toDelete.length === 0) {
-      await interaction.followUp('No bot messages found to delete.');
+      const embed = EmbedService.createInfoEmbed('Prune', 'No bot messages found to delete.', interaction.user);
+      await interaction.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral });
       return;
     }
 
