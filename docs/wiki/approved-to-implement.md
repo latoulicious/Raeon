@@ -38,5 +38,8 @@ Absorbs the deferred Docker refactor; on completion closes F-1..F-4,
 F-6, F-7, F-9, F-10 plus the single-guild voice, resume-restart, and
 cookies constraints.
 
-Progress: not started — **L0 begins next session** (user decision
-2026-06-07).
+Progress: **shipped 2026-06-07** — L0 `76636b7`, L1 `b89df9b`,
+L2 `0bdc948`, L3 `ed37dd4`, L4 `170bfdd`, L5 `7ee87aa`, L6 docs sync.
+Closed F-1..F-4, F-6, F-7, F-9, F-10 (see resolutions.md); F-8 is the
+only open finding. E2e verified in-stack; the per-command smoke
+checklist lives in implementation-tracker.md.

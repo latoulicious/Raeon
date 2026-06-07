@@ -21,16 +21,17 @@ repos are convention precedent only.
 
 Current state:
 
-- TypeScript (ESM) bot on discord.js v14 + @discordjs/voice; 14 slash
-  commands registered globally (or per-guild in dev mode).
-- Audio pipeline: spawned `yt-dlp` → spawned `ffmpeg` (opus 48kHz stereo
-  128k) → Discord voice connection. Both binaries plus the YouTube cookies
-  file are validated at startup.
+- TypeScript (ESM) bot on discord.js v14; 14 slash commands registered
+  globally (or per-guild in dev mode).
+- Audio: a Lavalink v4 node (Docker, youtube-source plugin) resolves
+  and streams everything, driven through Shoukaku
+  (`infrastructure/lavalink.ts`). The bot keeps queueing, command UX,
+  and Discord session state — no audio bytes, no binaries.
 - Optional PostgreSQL log sink (`logs` table, auto-created). No business
   data in the database, no migration system.
-- Docker setup exists but has unresolved findings (image build, healthcheck,
-  missing mounted files) — see [findings.md](findings.md) before relying
-  on it.
+- Docker: multi-stage `node:24-alpine` image + compose stack
+  (bot + lavalink + postgres), e2e-verified 2026-06-07. Open findings:
+  F-8 only.
 - No test suite.
 
 Start here:

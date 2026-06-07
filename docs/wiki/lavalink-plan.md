@@ -8,7 +8,7 @@ tags:
   - raeon
   - plan
 type: plan
-status: active
+status: completed
 updated: 2026-06-07
 ---
 

@@ -46,3 +46,35 @@ findings are unapproved in [nice-to-have.md](nice-to-have.md).
   which the orchestrator force-stops. The PlayerPort comment and the
   session log overclaimed "always follows" — both now state the
   fatal/non-fatal split and the `stuck` coverage explicitly.
+
+## 2026-06-07 — Lavalink migration close-outs (L0–L5)
+
+- **F-1** resolved (L5, `7ee87aa`) — multi-stage `node:24-alpine`
+  Dockerfile: full `npm ci` + `tsc` in the builder, `npm ci --omit=dev`
+  prune, runtime ships `dist/` + prod `node_modules` only. Build
+  verified clean (264MB image).
+- **F-2** resolved (L5, `7ee87aa`) — the fake `--health-check` flag is
+  gone from both the Dockerfile and compose; the bot has no
+  healthcheck (no cheap probe exists without an HTTP server — by
+  design). The lavalink and postgres services carry real healthchecks
+  and gate the bot's start.
+- **F-3** resolved (L5, `7ee87aa`) — dead `cookies.txt` and `init.sql`
+  mounts removed from compose; neither file is needed anymore.
+- **F-4** fully resolved (L5, `7ee87aa`) — Dockerfile on
+  `node:24-alpine`; engines/README were aligned at stabilization R2.
+  One Node story everywhere.
+- **F-6** resolved (L2, `0bdc948`) — `/skip` advances via the track
+  `end` event: `GuildPlayer.skip()` stops the track and the resulting
+  `end` auto-starts the next queued track. User-verified in-stack
+  playback 2026-06-07; per-command smoke tracked at L6.
+- **F-7** resolved (L2, `0bdc948`) — the 300s `VoiceGateway.play()`
+  timeout died with the file; Lavalink streams without a bot-side
+  ceiling.
+- **F-9** resolved (L5, `7ee87aa`) — `EXPOSE 3000` removed; the image
+  exposes nothing (no HTTP server exists).
+- **F-10** resolved (L4, `170bfdd`) — the entire `@discordjs/voice` /
+  `@discordjs/opus` chain (and its `tar` advisories) was dropped;
+  `npm audit` reports 0 vulnerabilities.
+
+Open: **F-8 only** (dead logging code / no retention — candidate work
+in [nice-to-have.md](nice-to-have.md)).

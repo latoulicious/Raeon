@@ -28,7 +28,8 @@
    ```bash
    DISCORD_TOKEN=your_bot_token_here
    LAVALINK_PASSWORD=shared_with_the_lavalink_node
-   DATABASE_URL=postgresql://user:password@localhost:5432/raeon
+   # optional, enables DB log mirroring:
+   DATABASE_URL=postgresql://raeon:your_db_password@localhost:5432/raeon
    ```
 
 4. Start the Lavalink node:
@@ -62,13 +63,15 @@
    ```bash
    DISCORD_TOKEN=your_bot_token_here
    LAVALINK_PASSWORD=shared_with_the_lavalink_node
-   DATABASE_URL=postgresql://raeon:password@postgres:5432/raeon
+   DB_PASSWORD=postgres_password_for_the_stack
    ```
+
+   In-stack `LAVALINK_HOST` and `DATABASE_URL` are injected by compose.
 
 3. Build and run:
 
    ```bash
-   docker-compose up -d --build
+   docker compose up -d --build
    ```
 
 For detailed Docker commands and management, see [DOCKER.md](./docs/DOCKER.md).

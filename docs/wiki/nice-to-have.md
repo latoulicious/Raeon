@@ -19,40 +19,33 @@ Unreviewed future work. Nothing here is approved — move items to
 user approval. Bugs with concrete evidence live in
 [findings.md](findings.md); this list is the candidate-work view.
 
-## Playback correctness
-
-- Auto-advance after `/skip` (today skip aborts the loop; queue is kept
-  but playback stops — findings F-6).
-- Remove or raise the 5-minute per-track playback timeout in
-  `VoiceGateway.play()` (findings F-7).
-- True pause/resume (seek/position memory) instead of restarting the
-  track from the beginning.
-- Route `VoiceGateway.play()` by explicit guildId instead of
-  "first live connection" so multi-guild playback is reliable.
-
 ## Features
 
-- Replace yt-dlp/ffmpeg with a different extraction/encoding stack —
-  user has a plan in mind (stated 2026-06-07, no spec yet). Blocks the
-  deferred Docker refactor (stabilization R4/R5) and would moot F-10.
-- Track metadata in the queue (title/duration at enqueue time) — would
-  also remove the presence `--get-title` subprocess churn.
-- Playlist support (`--no-playlist` is currently forced).
-- Volume control.
-- Health endpoint or real `--health-check` fast path (also fixes
-  findings F-2).
+- **lavasrc sources** (Spotify/Deezer/Apple Music) — plugin on the
+  Lavalink node; deliberately out of the migration's YouTube-parity
+  scope.
+- **Volume control / filters** — Lavalink supports both natively;
+  surface as commands.
+- **Full playlist queueing** — playlists currently resolve to a single
+  track with an info notice (migration non-goal). Mind the queue cap.
+- **Persistent queues** — queue is in-memory and dies with the bot
+  process (see known-constraints).
+- Health endpoint for the bot (would need an HTTP server — see
+  AGENTS.md constraint; needs approval).
 
 ## Operations
 
-- Fix the Docker image build (findings F-1) and compose mounts (F-3).
 - Wire `cleanupOldLogs()` (exists, never called) or a retention policy —
-  the `logs` table grows unbounded.
-- Remove or use dead code: `getMetrics()`, `logWithContext()`.
-- Bump the Dockerfile base off node:18 (rest of F-4 — engines/README
-  fixed at stabilization R2; lands with the deferred R4 refactor).
+  the `logs` table grows unbounded (findings F-8).
+- Remove or use dead code: `getMetrics()`, `logWithContext()` (findings
+  F-8).
+- Persist the Lavalink plugin jar across container recreates (volume) —
+  today it re-downloads at node boot.
+- youtube-source auth (poToken/OAuth) — configure only if YT blocking
+  is observed; hooks are ready in `lavalink/application.yml`.
 
 ## Quality
 
-- Test suite (none exists; even smoke tests around `GuildPlayer` state
-  transitions and the queue would pay off).
+- Test suite (none exists; `GuildPlayer` state transitions and the
+  queue logic are prime candidates — the L2 smoke script was throwaway).
 - CI (build + lint on push).
