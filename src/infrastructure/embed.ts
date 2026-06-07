@@ -318,8 +318,7 @@ export class EmbedService {
 
   static createHelpEmbed(client: Client): EmbedBuilder {
     const embed = this.createBaseEmbed('Raeon', this.COLORS.ACCENT)
-      .setURL('https://github.com/latoulicious/Raeon')
-      .setDescription('A powerful Discord music bot with clean architecture and stability features.');
+      .setURL('https://github.com/latoulicious/Raeon');
 
     if (client.user) {
       embed.setThumbnail(client.user.displayAvatarURL());
@@ -329,11 +328,11 @@ export class EmbedService {
       {
         name: 'Music Commands',
         value:
-          '`/play <url>` - Play a song from YouTube\n' +
+          '`/play <url|query>` - Play a track or playlist from YouTube\n' +
           '`/stop` - Stop playing and disconnect\n' +
           '`/skip` - Skip the current song\n' +
           '`/pause` - Pause the current song\n' +
-          '`/resume` - Resume paused playback\n' +
+          '`/resume` - Resume playback or restore the previous session\n' +
           '`/nowplaying` - Show currently playing song\n' +
           '`/queue` - Show the music queue\n' +
           '`/shuffle` - Shuffle the music queue\n' +
@@ -349,19 +348,8 @@ export class EmbedService {
           '`/commands` - Show this help message\n' +
           '`/prune [amount]` - Delete bot messages',
         inline: false
-      },
-      {
-        name: 'Features',
-        value: '• Stable playback with error handling\n' +
-               '• Queue management\n' +
-               '• YouTube search functionality\n' +
-               '• High-quality audio streaming',
-        inline: false
       }
-    )
-    .setFooter({
-      text: 'Made with TypeScript + Discord.js'
-    });
+    );
 
     return embed;
   }
