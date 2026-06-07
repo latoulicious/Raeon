@@ -202,6 +202,15 @@ export class EmbedService {
     return embed;
   }
 
+  static createPlaylistEmbed(playlistName: string, queued: number, total: number, user: User): EmbedBuilder {
+    return this.createSuccessEmbed('Queued Playlist', `**${this.truncate(playlistName, 100)}**`, user)
+      .addFields({
+        name: 'Tracks',
+        value: `Queued ${queued} of ${total} track${total === 1 ? '' : 's'}`,
+        inline: true
+      });
+  }
+
   static createSkipEmbed(queueLength: number, user: User): EmbedBuilder {
     const description = `**Skipped current song!**\nQueue: ${queueLength > 0
       ? `${queueLength} song${queueLength === 1 ? '' : 's'} remaining`

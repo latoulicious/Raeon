@@ -27,6 +27,9 @@ const SNAPSHOT_DEBOUNCE_MS = 1_000;
 /** Persisted sessions older than this are deleted at boot instead of staged. */
 const PENDING_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
+/** Queue cap — product decision, change only when explicitly asked. */
+const MAX_QUEUE_SIZE = 20;
+
 export class MusicService {
   private readonly players = new Map<string, GuildPlayer>();
   private readonly timeoutService: TimeoutService;
@@ -115,12 +118,11 @@ export class MusicService {
 
       let player = this.players.get(guildId);
 
-      // Check queue limit (20 songs max)
-      const maxQueueSize = 20;
-      if (player && player.getQueue().length >= maxQueueSize) {
+      // Check queue limit
+      if (player && player.getQueue().length >= MAX_QUEUE_SIZE) {
         throw new MusicServiceError(
           'Queue is full',
-          `The queue has reached its maximum limit of ${maxQueueSize} songs. Use /clear to remove all songs or wait for some to finish playing.`
+          `The queue has reached its maximum limit of ${MAX_QUEUE_SIZE} songs. Use /clear to remove all songs or wait for some to finish playing.`
         );
       }
 
@@ -137,6 +139,51 @@ export class MusicService {
       });
 
       return { restoredCount };
+    } catch (error) {
+      throw this.handleServiceError(error);
+    }
+  }
+
+  /**
+   * Bulk enqueue (playlists): fills the queue up to the cap and reports
+   * honest counts. A pending session revives first and counts against
+   * the cap, same as play(); a queue with no room throws the normal
+   * queue-full error.
+   */
+  async playMany(guildId: string, voiceChannelId: string, textChannelId: string, tracks: Track[]): Promise<{ queued: number; dropped: number; restoredCount: number }> {
+    try {
+      this.timeoutService.updateActivity(guildId);
+      this.lastTextChannelIds.set(guildId, textChannelId);
+      this.lastVoiceChannelIds.set(guildId, voiceChannelId);
+
+      const restoredCount = await this.restorePendingSession(guildId, voiceChannelId);
+
+      let player = this.players.get(guildId);
+
+      const room = MAX_QUEUE_SIZE - (player?.getQueue().length ?? 0);
+      if (room <= 0) {
+        throw new MusicServiceError(
+          'Queue is full',
+          `The queue has reached its maximum limit of ${MAX_QUEUE_SIZE} songs. Use /clear to remove all songs or wait for some to finish playing.`
+        );
+      }
+
+      if (!player) {
+        player = await this.createPlayer(guildId, voiceChannelId);
+      }
+
+      const toQueue = tracks.slice(0, room);
+      for (const track of toQueue) {
+        player.enqueue(track);
+      }
+      logger.debug({ guildId, queued: toQueue.length, dropped: tracks.length - toQueue.length, queueSize: player.getQueue().length }, 'Bulk added tracks to queue');
+
+      // Start playback without waiting for it to complete
+      player.start().catch(error => {
+        this.handlePlaybackError(guildId, error);
+      });
+
+      return { queued: toQueue.length, dropped: tracks.length - toQueue.length, restoredCount };
     } catch (error) {
       throw this.handleServiceError(error);
     }

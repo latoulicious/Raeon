@@ -52,6 +52,22 @@ async function execute(
 
     const result = await services.music.resolve(identifier);
 
+    // Pure playlist URLs queue the whole list; watch URLs that merely
+    // carry a &list= param fall through to the single-track path.
+    if (result.kind === 'playlist' && isPurePlaylistUrl(identifier)) {
+      const { queued, dropped, restoredCount } = await services.music.playMany(guildId, voiceChannelId, textChannelId, result.tracks);
+      const embed = EmbedService.createPlaylistEmbed(result.playlistName, queued, result.tracks.length, interaction.user);
+
+      logger.info({ guildId, playlist: result.playlistName, queued, dropped, userId: interaction.user.id, commandName: 'play' }, 'Playlist queued');
+      await interaction.followUp({ embeds: [embed] });
+
+      if (restoredCount > 0) {
+        const restoredEmbed = EmbedService.createSessionRestoredEmbed(restoredCount, interaction.user);
+        await interaction.followUp({ embeds: [restoredEmbed] });
+      }
+      return;
+    }
+
     let track;
     let playlistNotice: string | null = null;
     switch (result.kind) {
@@ -96,6 +112,19 @@ async function execute(
       : 'Failed to play the song. Please try again later.';
     const embed = EmbedService.createErrorEmbed('Play', message, interaction.user);
     await interaction.followUp({ embeds: [embed] });
+  }
+}
+
+/**
+ * Only real playlist links (path /playlist) queue the whole list;
+ * casually-copied watch URLs with a &list= param (incl. youtu.be) and
+ * YouTube mixes stay on the single-track path.
+ */
+function isPurePlaylistUrl(input: string): boolean {
+  try {
+    return new URL(input).pathname.includes('/playlist');
+  } catch {
+    return false;
   }
 }
 
