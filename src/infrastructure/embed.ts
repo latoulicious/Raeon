@@ -289,6 +289,14 @@ export class EmbedService {
     );
   }
 
+  static createSessionRestoredEmbed(count: number, user?: User): EmbedBuilder {
+    return this.createInfoEmbed(
+      'Session Restored',
+      `Restored ${count} track${count === 1 ? '' : 's'} from the previous session.`,
+      user
+    );
+  }
+
   static createTimeoutEmbed(): EmbedBuilder {
     return this.createBaseEmbed('Idle Timeout', this.COLORS.WARNING)
       .setDescription('Disconnected from voice channel due to 5 minutes of inactivity.')

@@ -3,6 +3,7 @@ import type { ResolveResult, Track } from '../../domain/track.js';
 import { LavalinkClient, LavalinkError } from '../../infrastructure/lavalink.js';
 import { appLogger } from '../../infrastructure/logger.js';
 import { QueueStore } from '../../infrastructure/queue-store.js';
+import type { PersistedSession } from '../../infrastructure/queue-store.js';
 import { TimeoutService } from '../../infrastructure/timeout.js';
 
 const logger = appLogger.getLogger('music-service');
@@ -23,6 +24,9 @@ const ERROR_NOTIFY_THROTTLE_MS = 30_000;
 /** Queue mutations within this window coalesce into one session upsert. */
 const SNAPSHOT_DEBOUNCE_MS = 1_000;
 
+/** Persisted sessions older than this are deleted at boot instead of staged. */
+const PENDING_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 export class MusicService {
   private readonly players = new Map<string, GuildPlayer>();
   private readonly timeoutService: TimeoutService;
@@ -30,6 +34,8 @@ export class MusicService {
   private readonly lastVoiceChannelIds = new Map<string, string>();
   private readonly lastErrorNotifyAt = new Map<string, number>();
   private readonly snapshotTimers = new Map<string, NodeJS.Timeout>();
+  /** Sessions loaded at boot, waiting for /play or /resume to revive them. */
+  private readonly pendingSessions = new Map<string, PersistedSession>();
 
   constructor(
     private readonly lavalink: LavalinkClient,
@@ -62,6 +68,31 @@ export class MusicService {
     this.timeoutService.startMonitoring();
   }
 
+  /**
+   * Boot: stage persisted sessions for lazy revive. Stale (>24h) and
+   * empty rows are deleted instead of staged.
+   */
+  async loadPendingSessions(): Promise<void> {
+    const sessions = await this.queueStore.loadAll();
+    const now = Date.now();
+    for (const session of sessions) {
+      const isStale = now - session.updatedAt.getTime() > PENDING_SESSION_MAX_AGE_MS;
+      const isEmpty = !session.currentTrack && session.queue.length === 0;
+      if (isStale || isEmpty) {
+        void this.queueStore.delete(session.guildId);
+        continue;
+      }
+      this.pendingSessions.set(session.guildId, session);
+    }
+    if (this.pendingSessions.size > 0) {
+      logger.info({ count: this.pendingSessions.size }, 'Staged persisted sessions for lazy restore');
+    }
+  }
+
+  hasPendingSession(guildId: string): boolean {
+    return this.pendingSessions.has(guildId);
+  }
+
   /** Resolve a URL or `ytsearch:` identifier; errors map to user-friendly messages. */
   async resolve(identifier: string): Promise<ResolveResult> {
     try {
@@ -72,11 +103,15 @@ export class MusicService {
     }
   }
 
-  async play(guildId: string, voiceChannelId: string, textChannelId: string, track: Track): Promise<void> {
+  async play(guildId: string, voiceChannelId: string, textChannelId: string, track: Track): Promise<{ restoredCount: number }> {
     try {
       this.timeoutService.updateActivity(guildId);
       this.lastTextChannelIds.set(guildId, textChannelId);
       this.lastVoiceChannelIds.set(guildId, voiceChannelId);
+
+      // A pending session revives first: its tracks take the head of the
+      // queue, the requested track appends after them.
+      const restoredCount = await this.restorePendingSession(guildId, voiceChannelId);
 
       let player = this.players.get(guildId);
 
@@ -90,16 +125,7 @@ export class MusicService {
       }
 
       if (!player) {
-        const port = await this.lavalink.join(guildId, voiceChannelId);
-        player = new GuildPlayer(
-          guildId,
-          port,
-          (error) => this.handlePlaybackError(guildId, error),
-          (failedTrack) => this.notifyTrackFailure(guildId, failedTrack),
-          () => this.scheduleSnapshot(guildId),
-        );
-        this.players.set(guildId, player);
-        logger.info({ guildId }, 'Created new guild player');
+        player = await this.createPlayer(guildId, voiceChannelId);
       }
 
       player.enqueue(track);
@@ -109,9 +135,73 @@ export class MusicService {
       player.start().catch(error => {
         this.handlePlaybackError(guildId, error);
       });
+
+      return { restoredCount };
     } catch (error) {
       throw this.handleServiceError(error);
     }
+  }
+
+  /**
+   * /resume with no live player: revive the pending session in the
+   * requester's current voice channel (not the stale saved one).
+   * Returns the restored track count.
+   */
+  async revive(guildId: string, voiceChannelId: string, textChannelId: string): Promise<number> {
+    try {
+      this.timeoutService.updateActivity(guildId);
+      this.lastTextChannelIds.set(guildId, textChannelId);
+      this.lastVoiceChannelIds.set(guildId, voiceChannelId);
+      return await this.restorePendingSession(guildId, voiceChannelId);
+    } catch (error) {
+      throw this.handleServiceError(error);
+    }
+  }
+
+  /**
+   * Consume the guild's pending session into a fresh player and start
+   * playback (the interrupted track replays from 0:00). No-op when a
+   * live player exists or nothing is pending.
+   */
+  private async restorePendingSession(guildId: string, voiceChannelId: string): Promise<number> {
+    if (this.players.has(guildId)) {
+      return 0;
+    }
+    const session = this.pendingSessions.get(guildId);
+    if (!session) {
+      return 0;
+    }
+    this.pendingSessions.delete(guildId);
+
+    const tracks = [session.currentTrack, ...session.queue].filter((t): t is Track => t !== null);
+    if (tracks.length === 0) {
+      return 0;
+    }
+
+    const player = await this.createPlayer(guildId, voiceChannelId);
+    for (const track of tracks) {
+      player.enqueue(track);
+    }
+    logger.info({ guildId, count: tracks.length }, 'Restored persisted session');
+
+    player.start().catch(error => {
+      this.handlePlaybackError(guildId, error);
+    });
+    return tracks.length;
+  }
+
+  private async createPlayer(guildId: string, voiceChannelId: string): Promise<GuildPlayer> {
+    const port = await this.lavalink.join(guildId, voiceChannelId);
+    const player = new GuildPlayer(
+      guildId,
+      port,
+      (error) => this.handlePlaybackError(guildId, error),
+      (failedTrack) => this.notifyTrackFailure(guildId, failedTrack),
+      () => this.scheduleSnapshot(guildId),
+    );
+    this.players.set(guildId, player);
+    logger.info({ guildId }, 'Created new guild player');
+    return player;
   }
 
   stop(guildId: string): void {
@@ -144,6 +234,7 @@ export class MusicService {
 
   /** User intent (/stop) or idle timeout: tear down AND drop the persisted session. */
   async disconnect(guildId: string): Promise<void> {
+    this.pendingSessions.delete(guildId);
     await this.teardownPlayer(guildId);
     void this.queueStore.delete(guildId);
   }

@@ -101,6 +101,7 @@ class Application {
 
   async start(config: any): Promise<void> {
     await this.queueStore.init();
+    await this.musicService.loadPendingSessions();
 
     this.discordClient.once('ready', () => {
       logger.info('Bot is ready');

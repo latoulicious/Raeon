@@ -14,9 +14,35 @@ async function execute(
   services: SlashCommandServices,
 ): Promise<void> {
   const guildId = interaction.guildId;
-  if (!guildId) {
+  if (!guildId || !interaction.guild) {
     const embed = EmbedService.createErrorEmbed('Resume', 'This command can only be used in a server.', interaction.user);
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  // No live player but a persisted session pending: revive it instead of
+  // unpausing. Joins the requester's current voice channel.
+  const hasLivePlayer = services.music.isPlaying(guildId) || services.music.isPaused(guildId) || services.music.getCurrentTrack(guildId) !== null;
+  if (!hasLivePlayer && services.music.hasPendingSession(guildId)) {
+    const voiceChannel = interaction.guild.voiceStates.cache.get(interaction.user.id)?.channel;
+    if (!voiceChannel) {
+      const embed = EmbedService.createErrorEmbed('Resume', 'You must be in a voice channel to restore the previous session.', interaction.user);
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    await interaction.deferReply();
+
+    try {
+      const restoredCount = await services.music.revive(guildId, voiceChannel.id, interaction.channelId);
+      const embed = EmbedService.createSessionRestoredEmbed(restoredCount, interaction.user);
+      await interaction.followUp({ embeds: [embed] });
+      logger.info({ guildId, restoredCount, userId: interaction.user.id, commandName: 'resume' }, 'Session revived');
+    } catch (error) {
+      logger.error({ guildId, error }, 'Error reviving session');
+      const embed = EmbedService.createErrorEmbed('Resume', 'Failed to restore the previous session.', interaction.user);
+      await interaction.followUp({ embeds: [embed] });
+    }
     return;
   }
 
