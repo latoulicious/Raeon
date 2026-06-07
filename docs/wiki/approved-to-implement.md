@@ -67,7 +67,9 @@ playlist queueing for pure playlist URLs (fill to cap, "Queued N of
 M"). First business table — the AGENTS.md "log sink only" constraint
 was rewritten at Q3.
 
-Progress: **Q0–Q3 shipped 2026-06-07** — Q0 `d105feb`, Q1 `be68f77`,
-Q2 `f311782`, Q3 docs sync. Crash + graceful drills verified at the
-Docker level; live Discord revive smoke tracked in
-implementation-tracker.md. Q4–Q6 (playlists) next.
+Progress: **shipped 2026-06-07** — Q0 `d105feb`, Q1 `be68f77`,
+Q2 `f311782`, Q3 `24a4274`, Q4 `d7a1627`, Q5 `579a1d0`, Q6 docs sync.
+Crash + graceful drills verified at the Docker level; cap math, intent
+rule, and restore interplay verified headless against compose
+postgres; 120-track playlist REST resolve verified live. In-Discord
+smoke for both bands tracked in implementation-tracker.md.

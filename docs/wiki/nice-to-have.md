@@ -26,9 +26,9 @@ user approval. Bugs with concrete evidence live in
   scope.
 - **Volume control / filters** — Lavalink supports both natively;
   surface as commands.
-- **Full playlist queueing** — playlists currently resolve to a single
-  track with an info notice (migration non-goal). Mind the queue cap.
-  *In progress: persistent-queue-plan.md Q4–Q6 (approved).*
+- **Playlist pagination/continuation** ("queue the next 20") — full
+  playlist queueing shipped fill-to-cap only (Q5); longer playlists
+  drop the remainder.
 - Health endpoint for the bot (would need an HTTP server — see
   AGENTS.md constraint; needs approval).
 

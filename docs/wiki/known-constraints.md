@@ -57,9 +57,13 @@ See git history of this file and `lavalink-plan.md` for what they were.
   restart loses every queue as before.
 - **Queue cap 20, idle disconnect 5 minutes** (sweep every 30s). Product
   decisions in `music.service.ts` / `timeout.ts`.
-- **Playlists resolve to one track.** `selectedTrack` → `v=` param
-  match → playlist head, with an info notice. Full playlist queueing is
-  a non-goal (nice-to-have).
+- **Only pure playlist URLs queue the whole list.** Path `/playlist`
+  → bulk enqueue, fill to cap, "Queued N of M". Watch URLs carrying a
+  `&list=` param (incl. `youtu.be` short links — the casually-copied
+  case) and YouTube mixes queue the linked video only
+  (`selectedTrack` → `v=` param match → playlist head) with a notice.
+  No pagination/continuation — tracks past the cap are dropped
+  honestly, not queued later.
 - **Exception handling rides `end(loadFailed)`.** Fatal track
   exceptions are followed by an `end(loadFailed)` that auto-advances;
   non-fatal ones leave the track playing. Hung tracks surface as

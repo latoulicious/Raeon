@@ -38,6 +38,7 @@ Status legend:
 | Audio pipeline | done | Lavalink end-to-end (L2–L4): `GuildPlayer` orchestrates a Shoukaku player via the domain `PlayerPort`; track-end auto-advance (F-6), native pause/resume (position kept), no track ceiling (F-7); queue cap 20. Legacy yt-dlp/ffmpeg code and deps deleted. E2e boot + playback user-verified in-stack 2026-06-07; per-command smoke checklist below. | — |
 | Multi-guild playback | partial | Shoukaku players are keyed per guild — the "first live connection" routing bug is structurally gone (L2). Concurrent two-guild playback not yet live-verified (smoke checklist). | — |
 | Search | done | `/search` and `/play ytsearchN:query` resolve through Lavalink REST (`ytsearch:`); the legacy N-count syntax is accepted and normalized (L3). | — |
+| Playlist queueing | done | Q4–Q5 (2026-06-07): pure playlist URLs (path `/playlist`) bulk-enqueue fill-to-cap with "Queued N of M"; watch+`&list=`/youtu.be/mixes stay single-track + notice. Resolver carries the full track array; cap math + intent rule verified headless, 120-track REST resolve verified live. In-Discord smoke pending (checklist below). | Pagination — `nice-to-have.md`. |
 | Idle timeout | done | 5-min inactivity → disconnect + embed notification to last text channel; 30s sweep. | — |
 | Presence | done | 30s rotation: current `Track.title` from resolve-time metadata (L3 — subprocess churn gone) or server/channel stats. | — |
 | Logging / metrics | partial | pino + optional fire-and-forget Postgres mirror; in-memory counters (`total_commands`, `active_players`, `track_load_failures`, `player_errors`) logged every 5 min. `cleanupOldLogs`, `getMetrics`, `logWithContext` are dead code (F-8). | Log retention + dead-code cleanup in `nice-to-have.md`. |
@@ -82,3 +83,12 @@ Persistent queue (Q3) additions:
 - [ ] `/play` in a guild with a pending session queues restored tracks
       first, requested track after, and posts the restore embed
 - [ ] `/stop` then restart → no session restored
+
+Playlist queueing (Q6) additions:
+
+- [ ] pure playlist URL > 20 tracks fills the queue to cap, embed says
+      "Queued 20 of M tracks"
+- [ ] pure playlist URL ≤ remaining cap queues all of it
+- [ ] watch URL + `&list=` queues the linked video only + notice
+- [ ] `youtu.be/<id>?list=` queues the linked video only + notice
+- [ ] mix-list URL (`selectedTrack: -1`) stays single-track

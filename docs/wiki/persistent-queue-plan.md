@@ -8,7 +8,7 @@ tags:
   - raeon
   - plan
 type: plan
-status: in-progress
+status: completed
 updated: 2026-06-07
 ---
 
@@ -18,13 +18,16 @@ Two queue features in one plan: persistence across bot death (Q0–Q3)
 and full playlist queueing (Q4–Q6). The bands are independent — either
 can land first; playlist is the smaller diff.
 
-> **Progress (2026-06-07):** Q0–Q3 shipped — Q0 `d105feb`, Q1
-> `be68f77`, Q2 `f311782`, Q3 docs sync. Crash + graceful drills
-> verified at Docker level; live `/resume` revive smoke tracked in
-> implementation-tracker.md. One deviation: `MusicService.cleanup()`
-> was split from `disconnect()` (teardown without row deletion) so
-> graceful shutdown preserves sessions — the plan implied it but the
-> shared code path made it an explicit change.
+> **Outcome (2026-06-07):** both bands shipped — Q0 `d105feb`, Q1
+> `be68f77`, Q2 `f311782`, Q3 `24a4274`, Q4 `d7a1627`, Q5 `579a1d0`,
+> Q6 docs sync. Crash + graceful drills verified at Docker level; cap
+> math, intent rule, and restore interplay verified headless; live
+> 120-track REST resolve confirmed. In-Discord smoke for both bands
+> tracked in implementation-tracker.md. Deviations: (1)
+> `MusicService.cleanup()` split from `disconnect()` (teardown without
+> row deletion) so graceful shutdown preserves sessions; (2) a bulk
+> enqueue into a queue with zero room throws the normal queue-full
+> error instead of replying "Queued 0 of M".
 
 ## Part 1 — Persistent queue (Q0–Q3)
 

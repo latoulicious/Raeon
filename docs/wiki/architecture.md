@@ -113,9 +113,15 @@ idle timeout delete the row; graceful shutdown flushes pending
 snapshots and preserves it (`cleanup()` tears players down without
 deleting sessions).
 
-Playlist URLs resolve to a single track: `selectedTrack` if set, else
-the `v=` param match, else the playlist head (`/play` sends an info
-notice; full playlist support is a non-goal).
+Playlists (Q4–Q5, 2026-06-07): the resolver returns the full track
+array (`ResolveResult` playlist variant carries `tracks` plus the
+linked/selected `track` — `selectedTrack` if set, else the `v=` param
+match, else the playlist head). Intent is decided in `play.ts`: a pure
+playlist URL (path `/playlist`) bulk-enqueues via
+`MusicService.playMany` — cap-aware, returns honest
+`{ queued, dropped }` for the "Queued N of M" embed; a watch URL that
+merely carries `&list=` (incl. `youtu.be`, and so YouTube mixes) keeps
+the single-track path with the not-supported notice.
 
 ## Commands
 
