@@ -86,5 +86,12 @@ findings are unapproved in [nice-to-have.md](nice-to-have.md).
   footer. Verified by build + rebuilt image; live `/queue` re-check is
   on the smoke checklist.
 
+## 2026-06-08 — persistent queue & playlist review
+
+- **F-14** resolved — notice copy now reads "queued the linked track
+  only. To queue the entire playlist, use the playlist URL
+  (youtube.com/playlist?list=...) instead of a video URL." Copy-only
+  change, behavior untouched; verified by build.
+
 Open: **F-8 only** (dead logging code / no retention — candidate work
 in [nice-to-have.md](nice-to-have.md)).

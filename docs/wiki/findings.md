@@ -82,3 +82,12 @@ fixes are recorded in [resolutions.md](resolutions.md) under the same ID.
   Discord caps field values at 1024 chars, so long titles overflowed
   and embed validation threw. Same latent overflow in the `/search`
   description (4096 cap, up to 20 results).
+
+## 2026-06-08 — persistent queue & playlist CodeRabbit review
+
+- **F-14** `src/commands/play.ts` watch+list notice — CodeRabbit
+  (minor): the single-track playlist notice still said "Playlists are
+  not supported yet", which became false when Q5 shipped full
+  queueing for pure playlist URLs. Misleads users who could paste the
+  playlist URL instead. Only finding from the Q0–Q6 review
+  (base `3e2fc8e`).

@@ -79,7 +79,7 @@ async function execute(
         break;
       case 'playlist':
         track = result.track;
-        playlistNotice = `Playlist "${result.playlistName}" detected (${result.tracks.length} tracks) — queued the linked track only. Playlists are not supported yet.`;
+        playlistNotice = `Playlist "${result.playlistName}" detected (${result.tracks.length} tracks) — queued the linked track only. To queue the entire playlist, use the playlist URL (youtube.com/playlist?list=...) instead of a video URL.`;
         break;
       case 'empty':
         break;
