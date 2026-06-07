@@ -1,0 +1,154 @@
+---
+title: "Persistent Queue Plan"
+aliases:
+  - "Raeon Persistent Queue Plan"
+tags:
+  - external-projects
+  - personal
+  - raeon
+  - plan
+type: plan
+status: draft
+updated: 2026-06-07
+---
+
+# Persistent Queue Plan (Q0–Q3)
+
+Goal: the queue survives a bot death. Today the queue is in-memory and
+dies with the process (known-constraints); a crash mid-playback loses
+the current track and everything queued behind it.
+
+Decisions taken at drafting (user, 2026-06-07):
+
+- **Lazy restore** — on boot, persisted sessions load into memory only;
+  playback waits for the next `/play` or `/resume` in that guild. No
+  auto-rejoin.
+- **Restart from 0:00** — the interrupted track replays from the start.
+  No position tracking, so writes happen only on queue mutations.
+- **Preserve on graceful shutdown too** — deploys/restarts keep the
+  session; only `/stop` and the idle timeout clear it.
+
+## Constraint change (approved in principle)
+
+AGENTS.md: "PostgreSQL is a log sink only. No business data lives in
+the database." A `guild_sessions` table is the first business table.
+AGENTS.md and known-constraints.md are updated at Q3. The DB stays
+**optional** — without `DATABASE_URL` persistence degrades to a no-op
+(logged once at boot); the Docker stack always has postgres.
+
+Per the standing convention: raw SQL on the existing `pg` driver, no
+ORM, no migration system — `CREATE TABLE IF NOT EXISTS` at boot, same
+pattern as the `logs` table.
+
+## Target design
+
+### Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS guild_sessions (
+  guild_id         VARCHAR(50) PRIMARY KEY,
+  voice_channel_id VARCHAR(50) NOT NULL,
+  text_channel_id  VARCHAR(50) NOT NULL,
+  current_track    JSONB,
+  queue            JSONB NOT NULL DEFAULT '[]',
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+One row per guild, upserted whole (queue cap is 20 — rows are tiny).
+`current_track`/`queue` store serialized `Track` objects; the
+Lavalink `encoded` blob replays as-is.
+
+### Write path (write-through)
+
+- `GuildPlayer` gains an optional `onChange?: () => void` ctor callback
+  (additive, same pattern as `onTrackFailed`), fired after any mutating
+  operation including the internal auto-advance shift.
+- `MusicService` debounces `onChange` (~1s) into an upsert snapshot of
+  `[currentTrack, queue]`. Fire-and-forget — a dead DB can never block
+  playback.
+- Row deleted on `/stop` (user intent) and idle-timeout disconnect.
+  Graceful shutdown does **not** delete — write-through means the row
+  is already current, so shutdown needs no write at all.
+
+### Restore path (lazy)
+
+- Boot: after DB init, load all rows into a `pendingSessions` map in
+  `MusicService`. Rows older than 24h are deleted instead of loaded
+  (default; revisit if it annoys).
+- `/play` in a guild with a pending session: restored
+  `[current_track, ...queue]` enqueues first, the requested track
+  appends after it. Queue-cap note: if the restore alone fills the cap,
+  the new track is rejected with the normal queue-full message.
+- `/resume` in a guild with a pending session and no live player:
+  revives the session — joins the **requester's** current voice channel
+  (not the stale saved one; needs the same voice-channel guard `/play`
+  has) and starts playback from the restored queue head.
+- Either revive path posts a short info embed ("Restored N tracks from
+  the previous session") and consumes the pending entry.
+
+## Phases
+
+### Q0 — Queue store
+
+- `infrastructure/queue-store.ts`: small `pg` Pool from `DATABASE_URL`
+  (separate from `DatabaseLogger`, which stays untouched), table
+  auto-create at boot, `upsert`/`load all`/`delete` with raw SQL,
+  connected/no-op modes.
+- Exit: build clean; manual SQL round-trip against the compose postgres
+  verified.
+
+### Q1 — Write-through persistence
+
+- `GuildPlayer.onChange` (additive ctor param; advance chain and state
+  transitions untouched).
+- `MusicService`: debounced snapshot upsert; delete on `/stop` and
+  idle timeout; wiring in `main.ts` (shutdown ordering untouched).
+- Exit: build clean; play/skip/clear against the dev stack shows the
+  row tracking the live queue; `/stop` removes it.
+
+### Q2 — Lazy restore
+
+- Boot load + 24h stale sweep; `pendingSessions` in `MusicService`.
+- `/play` merge semantics; `/resume` revive (voice guard + restore
+  embed); pending entry consumed on first revive, deleted on `/stop`
+  before any revive.
+- Exit: `docker kill` the bot mid-playback → `docker compose up` →
+  `/resume` rejoins and replays the interrupted track from 0:00 with
+  the queue intact.
+
+### Q3 — Verify + docs
+
+- Crash/restart drill (above) plus graceful-restart drill
+  (`docker compose restart raeon-bot`).
+- Docs: AGENTS.md (constraint rewrite), known-constraints.md
+  (queue-in-memory entry replaced), architecture.md (store + restore
+  flow), implementation-tracker.md row, README env note if any,
+  session log.
+- Exit: docs match; both drills pass.
+
+## Non-goals
+
+- Position resume (decided out — restart from 0:00).
+- Auto-rejoin on boot (decided out — lazy restore).
+- Queue persistence without PostgreSQL (no file fallback; no-DB mode
+  simply has no persistence).
+- Any change to playback semantics, the queue cap, or `PlayerPort`
+  (the lazy + from-zero decisions mean the interface needs nothing
+  new).
+
+## Risks
+
+- `guild-player.ts` is a protected file — the change is one additive
+  optional callback, same shape as U2's `onTrackFailed`; the advance
+  chain is not touched.
+- `/resume` gains a second meaning (revive a dead session vs unpause a
+  live one). The two states are disjoint (no live player vs paused
+  player), but the command copy must make the revive case obvious.
+- Stale `encoded` blobs after a Lavalink major upgrade could fail to
+  decode — they ride the existing `loadFailed` → advance + notify
+  path, so the failure mode is graceful.
+- Restored-then-rejected `/play` (cap full from restore) may surprise —
+  the queue-full message already names `/clear` as the out.
+- Debounced writes lose at most ~1s of mutations on a crash —
+  acceptable for a music queue.
