@@ -2,6 +2,7 @@ import { loadConfig } from './config/index.js';
 import { DiscordClient } from './infrastructure/discord-client.js';
 import { CommandManager } from './infrastructure/command-manager.js';
 import { LavalinkClient } from './infrastructure/lavalink.js';
+import { QueueStore } from './infrastructure/queue-store.js';
 import { PingService } from './application/services/ping.service.js';
 import { MusicService } from './application/services/music.service.js';
 import { handleSlashCommand } from './handler/slash.js';
@@ -31,6 +32,7 @@ const logger = appLogger.getLogger('main');
 class Application {
   private readonly discordClient: DiscordClient;
   private readonly lavalinkClient: LavalinkClient;
+  private readonly queueStore: QueueStore;
   private readonly pingService: PingService;
   private readonly musicService: MusicService;
   private readonly commandManager: CommandManager;
@@ -51,9 +53,12 @@ class Application {
     });
     this.commandManager = new CommandManager(this.discordClient.raw);
 
+    this.queueStore = new QueueStore(process.env.DATABASE_URL);
+
     this.pingService = new PingService();
     this.musicService = new MusicService(
       this.lavalinkClient,
+      this.queueStore,
       async (guildId, textChannelId) => {
         try {
           const channel = await this.discordClient.raw.channels.fetch(textChannelId);
@@ -95,6 +100,8 @@ class Application {
   }
 
   async start(config: any): Promise<void> {
+    await this.queueStore.init();
+
     this.discordClient.once('ready', () => {
       logger.info('Bot is ready');
       updatePresence(this.discordClient.raw, this.musicService);
@@ -200,6 +207,9 @@ class Application {
         await appLogger.cleanup();
         // Console log here because the logger is now closed
         console.log('Database logger connection closed');
+
+        await this.queueStore.close();
+        console.log('Queue store connection closed');
         
         clearTimeout(forceExit);
         logger.info('Bot shut down successfully');

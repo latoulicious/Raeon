@@ -2,6 +2,7 @@ import { GuildPlayer, GuildPlayerError } from '../../domain/guild-player.js';
 import type { ResolveResult, Track } from '../../domain/track.js';
 import { LavalinkClient, LavalinkError } from '../../infrastructure/lavalink.js';
 import { appLogger } from '../../infrastructure/logger.js';
+import { QueueStore } from '../../infrastructure/queue-store.js';
 import { TimeoutService } from '../../infrastructure/timeout.js';
 
 const logger = appLogger.getLogger('music-service');
@@ -19,14 +20,20 @@ export type PlaybackErrorNotificationCallback = (guildId: string, textChannelId:
 /** Minimum gap between playback-error embeds per guild, so cascading failures send one message. */
 const ERROR_NOTIFY_THROTTLE_MS = 30_000;
 
+/** Queue mutations within this window coalesce into one session upsert. */
+const SNAPSHOT_DEBOUNCE_MS = 1_000;
+
 export class MusicService {
   private readonly players = new Map<string, GuildPlayer>();
   private readonly timeoutService: TimeoutService;
   private readonly lastTextChannelIds = new Map<string, string>();
+  private readonly lastVoiceChannelIds = new Map<string, string>();
   private readonly lastErrorNotifyAt = new Map<string, number>();
+  private readonly snapshotTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly lavalink: LavalinkClient,
+    private readonly queueStore: QueueStore,
     private readonly onTimeoutNotification?: TimeoutNotificationCallback,
     private readonly onPlaybackErrorNotification?: PlaybackErrorNotificationCallback,
   ) {
@@ -69,6 +76,7 @@ export class MusicService {
     try {
       this.timeoutService.updateActivity(guildId);
       this.lastTextChannelIds.set(guildId, textChannelId);
+      this.lastVoiceChannelIds.set(guildId, voiceChannelId);
 
       let player = this.players.get(guildId);
 
@@ -88,6 +96,7 @@ export class MusicService {
           port,
           (error) => this.handlePlaybackError(guildId, error),
           (failedTrack) => this.notifyTrackFailure(guildId, failedTrack),
+          () => this.scheduleSnapshot(guildId),
         );
         this.players.set(guildId, player);
         logger.info({ guildId }, 'Created new guild player');
@@ -133,9 +142,41 @@ export class MusicService {
     }
   }
 
+  /** User intent (/stop) or idle timeout: tear down AND drop the persisted session. */
   async disconnect(guildId: string): Promise<void> {
+    await this.teardownPlayer(guildId);
+    void this.queueStore.delete(guildId);
+  }
+
+  /**
+   * Graceful shutdown: flush pending snapshots so the persisted rows are
+   * current, then tear players down WITHOUT deleting their sessions —
+   * deploys and restarts must keep the queue (only /stop and the idle
+   * timeout clear it).
+   */
+  async cleanup(): Promise<void> {
+    this.timeoutService.stopMonitoring();
+    for (const guildId of Array.from(this.snapshotTimers.keys())) {
+      this.cancelSnapshot(guildId);
+      await this.writeSnapshot(guildId);
+    }
+    const guildIds = Array.from(this.players.keys());
+    logger.info({ count: guildIds.length }, 'Cleaning up all active music players');
+    for (const guildId of guildIds) {
+      try {
+        await this.teardownPlayer(guildId);
+      } catch (error) {
+        logger.error({ guildId, error }, 'Error disconnecting player during cleanup');
+      }
+    }
+  }
+
+  /** Shared teardown: stops playback and forgets the guild in memory only. */
+  private async teardownPlayer(guildId: string): Promise<void> {
     this.timeoutService.removeGuild(guildId);
+    this.cancelSnapshot(guildId);
     this.lastTextChannelIds.delete(guildId);
+    this.lastVoiceChannelIds.delete(guildId);
     this.lastErrorNotifyAt.delete(guildId);
     const player = this.players.get(guildId);
     if (player) {
@@ -150,19 +191,6 @@ export class MusicService {
       await this.lavalink.leave(guildId);
     } catch (error) {
       logger.warn({ guildId, error }, 'Error leaving voice channel during disconnect');
-    }
-  }
-
-  async cleanup(): Promise<void> {
-    this.timeoutService.stopMonitoring();
-    const guildIds = Array.from(this.players.keys());
-    logger.info({ count: guildIds.length }, 'Cleaning up all active music players');
-    for (const guildId of guildIds) {
-      try {
-        await this.disconnect(guildId);
-      } catch (error) {
-        logger.error({ guildId, error }, 'Error disconnecting player during cleanup');
-      }
     }
   }
 
@@ -230,6 +258,47 @@ export class MusicService {
   private handlePlaybackError(guildId: string, error: unknown): void {
     logger.error({ guildId, error }, 'Error during playback');
     appLogger.incrementPlayerErrors();
+  }
+
+  /** Debounce queue mutations into one write-through session upsert. */
+  private scheduleSnapshot(guildId: string): void {
+    this.cancelSnapshot(guildId);
+    this.snapshotTimers.set(
+      guildId,
+      setTimeout(() => {
+        this.snapshotTimers.delete(guildId);
+        void this.writeSnapshot(guildId);
+      }, SNAPSHOT_DEBOUNCE_MS),
+    );
+  }
+
+  private cancelSnapshot(guildId: string): void {
+    const timer = this.snapshotTimers.get(guildId);
+    if (timer) {
+      clearTimeout(timer);
+      this.snapshotTimers.delete(guildId);
+    }
+  }
+
+  /**
+   * Persist the guild's [currentTrack, queue] snapshot. Fire-and-forget:
+   * the store swallows DB failures, so a dead DB can never block playback.
+   */
+  private async writeSnapshot(guildId: string): Promise<void> {
+    const player = this.players.get(guildId);
+    const voiceChannelId = this.lastVoiceChannelIds.get(guildId);
+    const textChannelId = this.lastTextChannelIds.get(guildId);
+    if (!player || !voiceChannelId || !textChannelId) {
+      return;
+    }
+
+    await this.queueStore.upsert({
+      guildId,
+      voiceChannelId,
+      textChannelId,
+      currentTrack: player.getCurrentTrack(),
+      queue: [...player.getQueue()],
+    });
   }
 
   /**

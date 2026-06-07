@@ -55,6 +55,8 @@ export class GuildPlayer {
     private readonly onError?: (error: Error) => void,
     /** Fired when a track dies (loadFailed/stuck); advancement is unaffected. */
     private readonly onTrackFailed?: (track: Track) => void,
+    /** Fired after any queue/current-track mutation (incl. the auto-advance shift); notification only. */
+    private readonly onChange?: () => void,
   ) {
     this.player.onTrackEnd((reason) => this.handleTrackEnd(reason));
     this.player.onTrackStuck(() => this.advanceAfterFailure());
@@ -62,6 +64,7 @@ export class GuildPlayer {
 
   enqueue(track: Track): void {
     this.queue.push(track);
+    this.onChange?.();
   }
 
   async start(): Promise<void> {
@@ -79,12 +82,14 @@ export class GuildPlayer {
 
     this.currentTrack = next;
     this.state = PlayerState.PLAYING;
+    this.onChange?.();
 
     try {
       await this.player.playTrack(next.encoded);
     } catch (error) {
       this.currentTrack = null;
       this.state = PlayerState.IDLE;
+      this.onChange?.();
       throw new GuildPlayerError('Playback failed', error instanceof Error ? error : new Error(String(error)));
     }
   }
@@ -124,6 +129,7 @@ export class GuildPlayer {
 
   async clear(): Promise<void> {
     this.queue = [];
+    this.onChange?.();
     await this.stop();
   }
 
@@ -155,6 +161,7 @@ export class GuildPlayer {
       this.queue[i] = this.queue[j]!;
       this.queue[j] = temp;
     }
+    this.onChange?.();
   }
 
   remove(position: number): Track | null {
@@ -162,7 +169,11 @@ export class GuildPlayer {
       return null;
     }
 
-    return this.queue.splice(position - 1, 1)[0] ?? null;
+    const removed = this.queue.splice(position - 1, 1)[0] ?? null;
+    if (removed) {
+      this.onChange?.();
+    }
+    return removed;
   }
 
   private handleTrackEnd(reason: TrackEndReason): void {
@@ -173,6 +184,7 @@ export class GuildPlayer {
     const endedTrack = this.currentTrack;
     this.currentTrack = null;
     this.state = PlayerState.IDLE;
+    this.onChange?.();
 
     if (reason === 'loadFailed' && endedTrack) {
       this.onTrackFailed?.(endedTrack);
