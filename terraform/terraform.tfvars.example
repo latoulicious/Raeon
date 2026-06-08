@@ -8,11 +8,14 @@ private_key_path = "~/.oci/oci_api_key.pem"
 region           = "ap-singapore-1"
 compartment_ocid = "ocid1.tenancy.oc1..xxxxx" # root compartment = tenancy OCID
 
-# --- Compute (defaults are fine; max free = 4 ocpus / 24 gb total) ---
-# instance_ocpus            = 2
-# instance_memory_gbs       = 12
+# --- Compute ---
+# Default shape is AMD VM.Standard.E2.1.Micro (1/8 OCPU + 1 GB, plentiful capacity).
+# Switch to "VM.Standard.A1.Flex" for ARM (4/24 max free, but often Out-of-capacity).
+# instance_shape            = "VM.Standard.E2.1.Micro"
+# instance_ocpus            = 1   # A1.Flex only (ignored for E2.1.Micro)
+# instance_memory_gbs       = 6   # A1.Flex only (ignored for E2.1.Micro)
 # boot_volume_size_gb       = 50
-# availability_domain_index = 0   # bump to 1/2 if "Out of capacity"
+# availability_domain_index = 0   # bump to 1/2 if "Out of capacity" (multi-AD regions)
 
 # --- Access ---
 ssh_public_key_path = "~/.ssh/id_rsa.pub"

@@ -25,6 +25,8 @@ services:
     restart: unless-stopped
     environment:
       - LAVALINK_SERVER_PASSWORD=${LAVALINK_PASSWORD}
+      # Cap JVM heap so Lavalink fits the 1 GB E2.1.Micro alongside PG + bot.
+      - _JAVA_OPTIONS=-Xmx384m -Xms128m
     volumes:
       - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
     ports:
@@ -44,6 +46,8 @@ services:
     image: postgres:15-alpine
     container_name: raeon-postgres
     restart: unless-stopped
+    # Trim memory footprint for the 1 GB box.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20"]
     environment:
       POSTGRES_DB: raeon
       POSTGRES_USER: raeon

@@ -34,21 +34,21 @@ variable "compartment_ocid" {
 # --- Compute ---
 
 variable "instance_shape" {
-  description = "Always Free ARM shape. Leave as A1.Flex."
+  description = "Always Free shape. E2.1.Micro (AMD, 1/8 OCPU + 1 GB, capacity almost always free) or A1.Flex (ARM, up to 4/24 but capacity-starved)."
   type        = string
-  default     = "VM.Standard.A1.Flex"
+  default     = "VM.Standard.E2.1.Micro"
 }
 
 variable "instance_ocpus" {
-  description = "OCPUs for the A1.Flex VM. Free tier allows up to 4 total across all A1 instances."
+  description = "OCPUs for A1.Flex (max 4 free). IGNORED for fixed shapes like E2.1.Micro."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "instance_memory_gbs" {
-  description = "Memory (GB) for the A1.Flex VM. Free tier allows up to 24 total across all A1 instances."
+  description = "Memory (GB) for A1.Flex (max 24 free). IGNORED for fixed shapes like E2.1.Micro."
   type        = number
-  default     = 12
+  default     = 6
 }
 
 variable "boot_volume_size_gb" {

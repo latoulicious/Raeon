@@ -1,3 +1,8 @@
+locals {
+  # Flex shapes (A1.Flex) require a shape_config; fixed shapes (E2.1.Micro) reject it.
+  is_flex_shape = can(regex("Flex$", var.instance_shape))
+}
+
 data "oci_identity_availability_domains" "ads" {
   compartment_id = var.tenancy_ocid
 }
@@ -19,9 +24,13 @@ resource "oci_core_instance" "raeon" {
   display_name        = "raeon-bot"
   shape               = var.instance_shape
 
-  shape_config {
-    ocpus         = var.instance_ocpus
-    memory_in_gbs = var.instance_memory_gbs
+  # Only Flex shapes accept this; skipped entirely for fixed E2.1.Micro.
+  dynamic "shape_config" {
+    for_each = local.is_flex_shape ? [1] : []
+    content {
+      ocpus         = var.instance_ocpus
+      memory_in_gbs = var.instance_memory_gbs
+    }
   }
 
   create_vnic_details {
@@ -38,7 +47,7 @@ resource "oci_core_instance" "raeon" {
   }
 
   metadata = {
-    ssh_authorized_keys = file(var.ssh_public_key_path)
+    ssh_authorized_keys = file(pathexpand(var.ssh_public_key_path))
     # NOTE: user_data is readable from instance metadata. No secrets here —
     # only Docker install + repo clone. Secrets (.env) go on the box via SSH.
     user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
