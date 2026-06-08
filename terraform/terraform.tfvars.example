@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+# --- Auth (Console > Profile > My profile / Tenancy) ---
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxxx"
+user_ocid        = "ocid1.user.oc1..xxxxx"
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "ap-singapore-1"
+compartment_ocid = "ocid1.tenancy.oc1..xxxxx" # root compartment = tenancy OCID
+
+# --- Compute (defaults are fine; max free = 4 ocpus / 24 gb total) ---
+# instance_ocpus            = 2
+# instance_memory_gbs       = 12
+# boot_volume_size_gb       = 50
+# availability_domain_index = 0   # bump to 1/2 if "Out of capacity"
+
+# --- Access ---
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+ssh_ingress_cidr    = "0.0.0.0/0" # tighten to "YOUR.IP.ADDR/32"
+
+# --- Bootstrap ---
+# Defaults to the public Raeon repo over HTTPS; override only to fork/test.
+# repo_url = "https://github.com/latoulicious/Raeon.git"

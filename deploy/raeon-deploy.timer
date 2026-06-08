@@ -1,0 +1,10 @@
+[Unit]
+Description=Raeon — poll for new release tag every 5 min
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
