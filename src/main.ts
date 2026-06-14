@@ -123,7 +123,7 @@ class Application {
     });
 
     this.discordClient.on('messageCreate', async (message) => {
-      await handleMessage(message, {});
+      await handleMessage(message, { client: this.discordClient.raw });
     });
 
     this.discordClient.on('messageReactionAdd', async (reaction, user) => {
