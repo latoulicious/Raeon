@@ -316,6 +316,37 @@ export class EmbedService {
     return this.createSuccessEmbed('Prune', `Successfully deleted ${count} bot messages.`, user);
   }
 
+  static createAboutEmbed(client: Client, version: string): EmbedBuilder {
+    const embed = this.createBaseEmbed('About Raeon', this.COLORS.ACCENT)
+      .setDescription('A Discord music bot powered by Lavalink.')
+      .setURL('https://github.com/latoulicious/Raeon')
+      .addFields(
+        { name: 'Version', value: version, inline: true },
+        { name: 'Creator', value: 'latoulicious', inline: true },
+        { name: 'Servers', value: `${client.guilds.cache.size}`, inline: true },
+        { name: 'Uptime', value: this.formatUptime(Math.floor((client.uptime ?? 0) / 1000)), inline: true },
+        { name: 'Repository', value: '[GitHub](https://github.com/latoulicious/Raeon)', inline: true }
+      );
+
+    if (client.user) {
+      embed.setThumbnail(client.user.displayAvatarURL());
+    }
+
+    return embed;
+  }
+
+  static createUsageEmbed(): EmbedBuilder {
+    const mem = process.memoryUsage();
+
+    return this.createBaseEmbed('Resource Usage', this.COLORS.INFO)
+      .addFields(
+        { name: 'Heap Memory', value: `${this.formatBytes(mem.heapUsed)} / ${this.formatBytes(mem.heapTotal)}`, inline: true },
+        { name: 'Uptime', value: this.formatUptime(Math.floor(process.uptime())), inline: true },
+        { name: 'Platform', value: `${process.platform}/${process.arch}`, inline: true },
+        { name: 'Node.js', value: process.version, inline: true }
+      );
+  }
+
   static createHelpEmbed(client: Client): EmbedBuilder {
     const embed = this.createBaseEmbed('Raeon', this.COLORS.ACCENT)
       .setURL('https://github.com/latoulicious/Raeon');
@@ -344,6 +375,8 @@ export class EmbedService {
       {
         name: 'Utility Commands',
         value:
+          '`/about` - Show bot info and metadata\n' +
+          '`/usage` - Show bot resource usage\n' +
           '`/ping` - Check bot latency\n' +
           '`/commands` - Show this help message\n' +
           '`/prune [amount]` - Delete bot messages',
@@ -415,6 +448,25 @@ export class EmbedService {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  private static formatUptime(seconds: number): string {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    parts.push(`${secs}s`);
+
+    return parts.join(' ');
+  }
+
+  private static formatBytes(bytes: number): string {
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
   }
 
   private static extractVideoId(url: string): string | null {
