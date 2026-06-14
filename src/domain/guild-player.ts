@@ -25,6 +25,8 @@ export interface PlayerPort {
 
 enum PlayerState {
   IDLE = 'idle',
+  /** Auto-advance in flight: a next track exists and start() is awaiting playTrack. */
+  QUEUED = 'queued',
   PLAYING = 'playing',
   PAUSED = 'paused',
 }
@@ -57,6 +59,8 @@ export class GuildPlayer {
     private readonly onTrackFailed?: (track: Track) => void,
     /** Fired after any queue/current-track mutation (incl. the auto-advance shift); notification only. */
     private readonly onChange?: () => void,
+    /** Fired when auto-advance begins the next queued track; resets the idle timer. */
+    private readonly onAutoAdvance?: () => void,
   ) {
     this.player.onTrackEnd((reason) => this.handleTrackEnd(reason));
     this.player.onTrackStuck(() => this.advanceAfterFailure());
@@ -138,7 +142,7 @@ export class GuildPlayer {
   }
 
   getIsPlaying(): boolean {
-    return this.state === PlayerState.PLAYING;
+    return this.state === PlayerState.PLAYING || this.state === PlayerState.QUEUED;
   }
 
   getIsPaused(): boolean {
@@ -193,6 +197,14 @@ export class GuildPlayer {
     if (this.suppressAdvance || reason === 'cleanup') {
       this.suppressAdvance = false;
       return;
+    }
+
+    // Auto-advance: mark QUEUED before the async start() so the microtask
+    // gap (currentTrack null, not yet PLAYING) still reports getIsPlaying()
+    // and the idle-timeout guard cannot mistake it for an idle player.
+    if (this.queue.length > 0) {
+      this.state = PlayerState.QUEUED;
+      this.onAutoAdvance?.();
     }
 
     this.start().catch((error) => {

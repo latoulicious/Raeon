@@ -48,8 +48,9 @@ export class MusicService {
   ) {
     this.timeoutService = new TimeoutService(async (guildId) => {
       const player = this.players.get(guildId);
-      if (player && player.getIsPlaying()) {
-        // If still playing, it's not idle. Reset activity.
+      if (player && (player.getIsPlaying() || player.getQueue().length > 0)) {
+        // Still playing, or tracks pending (covers the auto-advance microtask
+        // gap where state briefly leaves PLAYING). Not idle — reset activity.
         this.timeoutService.updateActivity(guildId);
         return;
       }
@@ -245,6 +246,7 @@ export class MusicService {
       (error) => this.handlePlaybackError(guildId, error),
       (failedTrack) => this.notifyTrackFailure(guildId, failedTrack),
       () => this.scheduleSnapshot(guildId),
+      () => this.timeoutService.updateActivity(guildId),
     );
     this.players.set(guildId, player);
     logger.info({ guildId }, 'Created new guild player');
