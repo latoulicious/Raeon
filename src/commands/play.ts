@@ -42,13 +42,11 @@ async function execute(
   const textChannelId = interaction.channelId;
 
   try {
-    // Keep the old yt-dlp ytsearchN: syntax working; Lavalink only knows
-    // the unnumbered ytsearch: prefix and /play takes the first hit anyway.
-    let identifier = url;
-    const searchMatch = url.match(/^ytsearch(\d*):(.+)$/);
-    if (searchMatch) {
-      identifier = `ytsearch:${searchMatch[2]}`;
-    }
+    // Normalize input onto a path that works on a flagged datacenter IP:
+    // plain text becomes a search, bare video URLs are routed through the
+    // radio/mix form so the login-gated single-video resolve path is avoided,
+    // and real playlist/mix URLs pass through untouched.
+    const identifier = normalizeIdentifier(url);
 
     const result = await services.music.resolve(identifier);
 
@@ -79,7 +77,11 @@ async function execute(
         break;
       case 'playlist':
         track = result.track;
-        playlistNotice = `Playlist "${result.playlistName}" detected (${result.tracks.length} tracks) — queued the linked track only. To queue the entire playlist, use the playlist URL (youtube.com/playlist?list=...) instead of a video URL.`;
+        // Synthetic radio mixes (list=RD...) we generate for bare video URLs
+        // resolve to the single requested track — no playlist notice needed.
+        if (!/[?&]list=RD/.test(identifier)) {
+          playlistNotice = `Playlist "${result.playlistName}" detected (${result.tracks.length} tracks) — queued the linked track only. To queue the entire playlist, use the playlist URL (youtube.com/playlist?list=...) instead of a video URL.`;
+        }
         break;
       case 'empty':
         break;
@@ -126,6 +128,57 @@ function isPurePlaylistUrl(input: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Extract a YouTube video ID from a watch / youtu.be / shorts URL, or null if
+ * the URL is not a recognizable single-video link.
+ */
+function extractVideoId(u: URL): string | null {
+  const host = u.hostname.replace(/^www\./, '');
+  if (host === 'youtu.be') {
+    return u.pathname.slice(1) || null;
+  }
+  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+    if (u.pathname === '/watch') return u.searchParams.get('v');
+    if (u.pathname.startsWith('/shorts/')) return u.pathname.split('/')[2] ?? null;
+  }
+  return null;
+}
+
+/**
+ * Map any /play input onto a Lavalink identifier that resolves on a flagged
+ * datacenter IP:
+ *   - ytsearchN: / ytsearch:  -> unnumbered ytsearch: (takes the first hit)
+ *   - plain text              -> ytsearch: query
+ *   - bare video URL          -> radio/mix form (avoids login-gated resolve)
+ *   - playlist / mix URLs     -> unchanged
+ */
+function normalizeIdentifier(raw: string): string {
+  const input = raw.trim();
+
+  const searchMatch = input.match(/^ytsearch(\d*):(.+)$/);
+  if (searchMatch) {
+    return `ytsearch:${searchMatch[2]}`;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
+  } catch {
+    // Not a URL and not an explicit search prefix — treat it as a search query.
+    return `ytsearch:${input}`;
+  }
+
+  // A bare single video (no playlist context) would hit the login-gated
+  // routeFromVideoId path. Route it through the video's radio mix instead,
+  // which returns the requested track via the working playlist path.
+  const videoId = extractVideoId(parsed);
+  if (videoId && !parsed.searchParams.has('list')) {
+    return `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}&start_radio=1`;
+  }
+
+  return input;
 }
 
 export const playCommand: SlashCommand = {
