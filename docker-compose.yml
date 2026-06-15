@@ -27,6 +27,8 @@ services:
       - LAVALINK_SERVER_PASSWORD=${LAVALINK_PASSWORD}
       # YouTube OAuth refresh token; resolved from .env (gitignored secret).
       - YOUTUBE_REFRESH_TOKEN=${YOUTUBE_REFRESH_TOKEN}
+      # Shared secret for the yt-cipher remoteCipher auth (.env).
+      - YT_CIPHER_TOKEN=${YT_CIPHER_TOKEN}
       # Cap JVM heap so Lavalink fits the 1 GB E2.1.Micro alongside PG + bot.
       - _JAVA_OPTIONS=-Xmx384m -Xms128m
     volumes:
