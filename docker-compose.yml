@@ -44,6 +44,21 @@ services:
       retries: 5
       start_period: 30s
 
+  yt-cipher:
+    # Remote signature-cipher server. Executes YouTube's player JS to derive
+    # stream signatures — handles player rotations the local cipher can't.
+    image: ghcr.io/kikkia/yt-cipher:master
+    container_name: raeon-yt-cipher
+    restart: unless-stopped
+    environment:
+      # Shared secret with Lavalink's remoteCipher.password (from .env).
+      - API_TOKEN=${YT_CIPHER_TOKEN}
+      # IAS variant = more stable script extraction per yt-cipher docs.
+      - OVERRIDE_SCRIPT_VARIANT=IAS
+    networks:
+      - raeon-network
+    mem_limit: 256m
+
   postgres:
     image: postgres:15-alpine
     container_name: raeon-postgres

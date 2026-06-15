@@ -4,8 +4,10 @@ server:
 
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.1"
-      snapshot: false
+    # Snapshot build (commit-pinned). Stable 1.18.1's local cipher can't parse
+    # current YT player scripts; deciphering is offloaded to remoteCipher below.
+    - dependency: "dev.lavalink.youtube:youtube-plugin:9d4dbeeb51f16d53078486d69d27654d4acfa7fb"
+      snapshot: true
   server:
     # Resolved from the container environment; boot fails if unset.
     password: "${LAVALINK_SERVER_PASSWORD}"
@@ -34,11 +36,20 @@ plugins:
       enabled: true
       refreshToken: "${YOUTUBE_REFRESH_TOKEN}"
       skipInitialization: true
+    # TV (TVHTML5) is the only OAuth-compatible client — it carries the token
+    # that bypasses the datacenter-IP "This video requires login" block.
     clients:
       - MUSIC
+      - TV
       - ANDROID_VR
       - WEB
       - WEBEMBEDDED
+    # YouTube rotates player scripts faster than the plugin's local cipher can
+    # track. Offload signature deciphering to the yt-cipher sidecar (compose);
+    # it executes the player JS, so it survives player changes without bumps.
+    remoteCipher:
+      url: "http://yt-cipher:8001"
+      password: "${YT_CIPHER_TOKEN}"
 
 logging:
   level:
