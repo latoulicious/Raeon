@@ -27,13 +27,18 @@ plugins:
     allowSearch: true
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
+    # Datacenter IP is flagged by YouTube; authenticate the node via OAuth.
+    # Token minted once via the device flow, injected from the container env
+    # (YOUTUBE_REFRESH_TOKEN, sourced from gitignored .env — never committed).
+    oauth:
+      enabled: true
+      refreshToken: "${YOUTUBE_REFRESH_TOKEN}"
+      skipInitialization: true
     clients:
       - MUSIC
       - ANDROID_VR
       - WEB
       - WEBEMBEDDED
-    # oauth/poToken auth hooks intentionally unset — configure only if
-    # YouTube starts blocking this node (lavalink-plan.md risk register).
 
 logging:
   level:
