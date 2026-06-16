@@ -52,6 +52,11 @@ if [ ! -f "$APP_DIR/.env" ]; then
   exit 1
 fi
 
+# External networks owned by the shared infra stacks (postgres, lavalink).
+# Idempotent — the bot stack declares them `external` and won't start without.
+docker network create shared-db    >/dev/null 2>&1 || true
+docker network create lavalink-net >/dev/null 2>&1 || true
+
 log "building + starting $latest_tag"
 docker compose up -d --build
 

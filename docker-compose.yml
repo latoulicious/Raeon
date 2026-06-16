@@ -1,3 +1,13 @@
+# Bot-only stack. Postgres and Lavalink+yt-cipher are extracted to shared
+# infra stacks (see /Atelier/Infrastructure/{postgres,lavalink}). The bot
+# reaches them over external docker networks:
+#   - shared-db    -> postgres:5432   (DATABASE_URL below)
+#   - lavalink-net -> lavalink:2333   (LAVALINK_HOST below)
+#
+# Both networks + both infra stacks must be up first:
+#   docker network create shared-db lavalink-net
+#   (cd /Atelier/Infrastructure/postgres && docker compose up -d)
+#   (cd /Atelier/Infrastructure/lavalink && docker compose up -d)
 services:
   raeon-bot:
     build: .
@@ -7,22 +17,19 @@ services:
       # In-stack values; these override host-dev settings from .env
       - NODE_ENV=production
       - LOG_LEVEL=info
+      # Service names on the shared networks (DNS-resolved across stacks).
       - LAVALINK_HOST=lavalink
       - DATABASE_URL=postgresql://raeon:${DB_PASSWORD}@postgres:5432/raeon
     env_file:
       - .env
-    depends_on:
-      lavalink:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
     ports:
       # Host-local only; lets a host-run Uptime Kuma / dev reach the probe.
-      # Kuma inside raeon-network can instead hit http://raeon-bot:3000/health
-      # with no published port.
+      # Kuma on shared-db/lavalink-net can instead hit
+      # http://raeon-discord-bot:3000/health with no published port.
       - "127.0.0.1:3000:3000"
     networks:
-      - raeon-network
+      - shared-db
+      - lavalink-net
     healthcheck:
       # busybox wget (node:alpine); non-2xx exits non-zero -> unhealthy
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
@@ -31,74 +38,10 @@ services:
       retries: 3
       start_period: 40s
 
-  lavalink:
-    image: ghcr.io/lavalink-devs/lavalink:4
-    container_name: raeon-lavalink
-    restart: unless-stopped
-    environment:
-      - LAVALINK_SERVER_PASSWORD=${LAVALINK_PASSWORD}
-      # YouTube OAuth refresh token; resolved from .env (gitignored secret).
-      - YOUTUBE_REFRESH_TOKEN=${YOUTUBE_REFRESH_TOKEN}
-      # Shared secret for the yt-cipher remoteCipher auth (.env).
-      - YT_CIPHER_TOKEN=${YT_CIPHER_TOKEN}
-      # Cap JVM heap so Lavalink fits the 1 GB E2.1.Micro alongside PG + bot.
-      - _JAVA_OPTIONS=-Xmx384m -Xms128m
-    volumes:
-      - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
-    ports:
-      # Host-local only; lets a host-run dev bot reach the node
-      - "127.0.0.1:2333:2333"
-    networks:
-      - raeon-network
-    healthcheck:
-      # $$ escapes compose interpolation; resolved inside the container
-      test: ["CMD-SHELL", "curl -sf -H \"Authorization: $${LAVALINK_SERVER_PASSWORD}\" http://localhost:2333/version || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  yt-cipher:
-    # Remote signature-cipher server. Executes YouTube's player JS to derive
-    # stream signatures — handles player rotations the local cipher can't.
-    image: ghcr.io/kikkia/yt-cipher:master
-    container_name: raeon-yt-cipher
-    restart: unless-stopped
-    environment:
-      # Shared secret with Lavalink's remoteCipher.password (from .env).
-      - API_TOKEN=${YT_CIPHER_TOKEN}
-      # IAS variant = more stable script extraction per yt-cipher docs.
-      - OVERRIDE_SCRIPT_VARIANT=IAS
-    networks:
-      - raeon-network
-    mem_limit: 256m
-
-  postgres:
-    image: postgres:15-alpine
-    container_name: raeon-postgres
-    restart: unless-stopped
-    # Trim memory footprint for the 1 GB box.
-    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20"]
-    environment:
-      POSTGRES_DB: raeon
-      POSTGRES_USER: raeon
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      # Host-local only; lets a host-run dev bot mirror logs
-      - "127.0.0.1:5432:5432"
-    networks:
-      - raeon-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U raeon"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 networks:
-  raeon-network:
-    driver: bridge
-
-volumes:
-  postgres_data:
+  # Both pre-created on the VPS and owned by the infra stacks:
+  #   docker network create shared-db lavalink-net
+  shared-db:
+    external: true
+  lavalink-net:
+    external: true
