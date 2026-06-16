@@ -27,6 +27,8 @@ import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
 import { StartupValidationError } from './infrastructure/startup-validator.js';
 import { EmbedService } from './infrastructure/embed.js';
+import { startHealthServer } from './infrastructure/health-server.js';
+import type { Server } from 'node:http';
 
 const logger = appLogger.getLogger('main');
 
@@ -41,6 +43,7 @@ class Application {
   private abortController: AbortController;
   private presenceInterval: NodeJS.Timeout | null = null;
   private metricsInterval: NodeJS.Timeout | null = null;
+  private healthServer: Server | null = null;
 
   constructor(config: any) {
     this.abortController = new AbortController();
@@ -137,6 +140,13 @@ class Application {
 
     this.setupGracefulShutdown();
     this.setupMetricsLogging();
+
+    const healthPort = Number(process.env.HEALTH_PORT || 3000);
+    this.healthServer = startHealthServer(healthPort, {
+      discord: this.discordClient.raw,
+      lavalink: this.lavalinkClient,
+      queueStore: this.queueStore,
+    });
   }
 
   private setupMetricsLogging(): void {
@@ -199,6 +209,10 @@ class Application {
         if (this.metricsInterval) {
           clearInterval(this.metricsInterval);
           logger.debug('Metrics interval cleared');
+        }
+        if (this.healthServer) {
+          await new Promise<void>((resolve) => this.healthServer!.close(() => resolve()));
+          logger.debug('Health server closed');
         }
 
         await this.musicService.cleanup();

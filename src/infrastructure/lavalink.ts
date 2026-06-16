@@ -90,6 +90,11 @@ export class LavalinkClient {
     });
   }
 
+  /** True when at least one Lavalink node is connected and usable. */
+  isNodeReady(): boolean {
+    return this.shoukaku.getIdealNode() !== undefined;
+  }
+
   async join(guildId: string, voiceChannelId: string): Promise<PlayerPort> {
     const shardId = this.client.guilds.cache.get(guildId)?.shardId ?? 0;
     const player = await this.shoukaku.joinVoiceChannel({

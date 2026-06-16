@@ -16,8 +16,20 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    ports:
+      # Host-local only; lets a host-run Uptime Kuma / dev reach the probe.
+      # Kuma inside raeon-network can instead hit http://raeon-bot:3000/health
+      # with no published port.
+      - "127.0.0.1:3000:3000"
     networks:
       - raeon-network
+    healthcheck:
+      # busybox wget (node:alpine); non-2xx exits non-zero -> unhealthy
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   lavalink:
     image: ghcr.io/lavalink-devs/lavalink:4

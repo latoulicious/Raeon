@@ -133,6 +133,25 @@ export class QueueStore {
     }
   }
 
+  /**
+   * Liveness probe. Resolves ok when persistence is disabled (DB is
+   * optional) or a `SELECT 1` succeeds; false only when an enabled pool
+   * fails to answer.
+   */
+  async ping(): Promise<boolean> {
+    if (!this.pool) {
+      return true;
+    }
+
+    try {
+      await this.pool.query('SELECT 1');
+      return true;
+    } catch (error) {
+      logger.error({ error }, 'Database health ping failed');
+      return false;
+    }
+  }
+
   async close(): Promise<void> {
     if (this.pool) {
       await this.pool.end();
