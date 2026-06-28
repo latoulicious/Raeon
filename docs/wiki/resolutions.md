@@ -9,7 +9,7 @@ tags:
   - review
 type: log
 status: active
-updated: 2026-06-07
+updated: 2026-06-28
 ---
 
 # Resolutions
@@ -95,3 +95,19 @@ findings are unapproved in [nice-to-have.md](nice-to-have.md).
 
 Open: **F-8 only** (dead logging code / no retention — candidate work
 in [nice-to-have.md](nice-to-have.md)).
+
+## 2026-06-28
+
+- **F-8** dead-code portion resolved — `cleanupOldLogs`
+  (`database-logger.ts`), `getMetrics` and `logWithContext`
+  (`logger.ts`) deleted; all three had zero callers (verified by grep).
+  `logToDatabase` and the `Metrics` type stay (still used). Build clean
+  under strict tsc. The **retention** portion (`logs` table grows
+  unbounded — no sweep) is deliberately deferred: the bot is low-volume
+  and the table is not yet large enough to hurt. Upgrade path when it
+  does: a periodic `DELETE FROM logs WHERE created_at < NOW() -
+  INTERVAL 'N days'` on a boot interval, or a Postgres-side policy.
+  Tracked in [nice-to-have.md](nice-to-have.md).
+
+Open: **none.** F-8 is the last finding; its dead code is gone and the
+retention remainder is parked as nice-to-have, not an open defect.

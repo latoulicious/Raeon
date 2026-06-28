@@ -9,12 +9,13 @@ tags:
   - reference
 type: reference
 status: active
-updated: 2026-06-07
+updated: 2026-06-28
 ---
 
 # Implementation Tracker
 
-Current implementation snapshot (audited against code 2026-06-07). Use
+Current implementation snapshot (audited against code 2026-06-07,
+re-synced 2026-06-28). Use
 code as the source of truth when docs drift. Future work belongs in
 [nice-to-have.md](nice-to-have.md); historical context in
 [deferred-notes.md](deferred-notes.md).
@@ -32,22 +33,23 @@ Status legend:
 | --- | --- | --- | --- |
 | Bootstrap / shutdown | done | Composition root in `main.ts`; graceful shutdown on SIGINT/SIGTERM/unhandled errors with 10s force-exit; cleanup order: intervals → music → client → DB pool. | — |
 | Config / startup validation | done | dotenv + hard checks: token length, `LAVALINK_PASSWORD` non-empty, `LAVALINK_PORT` range; friendly failure messages. No binaries, no cookies (L4). | — |
-| Slash commands (14) | done | ping, play, stop, skip, queue, clear, commands, search, nowplaying, pause, resume, shuffle, remove, prune. Dispatch via `handler/slash.ts`. | — |
+| Slash commands (15) | done | ping, play, stop, skip, queue, clear, commands, nowplaying, pause, resume, shuffle, remove, prune, about, usage. `/search` removed (`dec539e`) — search now via `/play`. `/about`+`/usage` added 2026-06-14. Dispatch via `handler/slash.ts`. | — |
 | Embed/error UX | done | UX refresh U0–U2 (2026-06-07): single palette + single-icon policy in `EmbedService`, shared track-line/list formatters char-budgeted to Discord limits (F-13), pre-defer ephemeral guard embeds, deduped handler fallback, plain `userFriendlyMessage`, throttled playback-failure channel notify. Live smoke pending (checklist below). | — |
 | Command registration | done | Global sync by default; dev-guild sync with `NODE_ENV=development` + `DEV_GUILD_ID`; `CLEAR_GUILDS` cleanup flag. | — |
 | Audio pipeline | done | Lavalink end-to-end (L2–L4): `GuildPlayer` orchestrates a Shoukaku player via the domain `PlayerPort`; track-end auto-advance (F-6), native pause/resume (position kept), no track ceiling (F-7); queue cap 20. Legacy yt-dlp/ffmpeg code and deps deleted. E2e boot + playback user-verified in-stack 2026-06-07; per-command smoke checklist below. | — |
 | Multi-guild playback | partial | Shoukaku players are keyed per guild — the "first live connection" routing bug is structurally gone (L2). Concurrent two-guild playback not yet live-verified (smoke checklist). | — |
-| Search | done | `/search` and `/play ytsearchN:query` resolve through Lavalink REST (`ytsearch:`); the legacy N-count syntax is accepted and normalized (L3). | — |
+| Search | done | Standalone `/search` removed (`dec539e`); search folded into `/play` — bare query or `ytsearchN:query` resolves through Lavalink REST (`ytsearch:`), legacy N-count syntax normalized. | — |
 | Playlist queueing | done | Q4–Q5 (2026-06-07): pure playlist URLs (path `/playlist`) bulk-enqueue fill-to-cap with "Queued N of M"; watch+`&list=`/youtu.be/mixes stay single-track + notice. Resolver carries the full track array; cap math + intent rule verified headless, 120-track REST resolve verified live. In-Discord smoke pending (checklist below). | Pagination — `nice-to-have.md`. |
 | Idle timeout | done | 5-min inactivity → disconnect + embed notification to last text channel; 30s sweep. | — |
 | Presence | done | 30s rotation: current `Track.title` from resolve-time metadata (L3 — subprocess churn gone) or server/channel stats. | — |
-| Logging / metrics | partial | pino + optional fire-and-forget Postgres mirror; in-memory counters (`total_commands`, `active_players`, `track_load_failures`, `player_errors`) logged every 5 min. `cleanupOldLogs`, `getMetrics`, `logWithContext` are dead code (F-8). | Log retention + dead-code cleanup in `nice-to-have.md`. |
-| Database | partial | `logs` + `guild_sessions` tables auto-created at boot; no migrations. | `logs` unbounded growth — `nice-to-have.md`. |
+| Logging / metrics | done | pino + optional fire-and-forget Postgres mirror; in-memory counters (`total_commands`, `active_players`, `track_load_failures`, `player_errors`) logged every 5 min. F-8 dead code (`cleanupOldLogs`, `getMetrics`, `logWithContext`) removed 2026-06-28. | — |
+| Database | partial | `logs` + `guild_sessions` tables auto-created at boot; no migrations. `logs` retention still unwired (deferred portion of F-8). | `logs` unbounded growth — `nice-to-have.md`. |
 | Queue persistence | done | Q0–Q3 (2026-06-07): write-through `guild_sessions` snapshots (debounced ~1s via `GuildPlayer.onChange`), lazy restore on `/play` (merge) or `/resume` (revive into requester's channel), 24h stale sweep, `/stop`/idle delete, graceful shutdown preserves. Crash + graceful drills verified at Docker level; live `/resume` revive in Discord pending (checklist below). | — |
 | Message/reaction handlers | reserved | Events wired, handlers are no-op stubs. | Define a use case first. |
 | Dependencies | done | Current as of 2026-06-07: discord.js 14.26.4, shoukaku 4.3.0, pino 10.3.1, TS 5.9.3 + NodeNext, @types/node 24, engines `>=24`. `npm audit` clean — the voice/opus chain and its tar advisories (F-10) are gone (L4). | — |
 | Docker | done | Multi-stage `node:24-alpine` Dockerfile (no apk toolchain, non-root `node` user, no EXPOSE/healthcheck); compose = bot + lavalink + postgres, bot gated on both healthchecks, dead `init.sql`/`cookies.txt` mounts gone (L5, e2e-verified 2026-06-07). F-1..F-4, F-9 closed in `resolutions.md`. | — |
 | Lavalink node | done | Compose service `lavalink` (ghcr v4.2.2, youtube-source 1.18.1, authed `/version` healthcheck, yml mounted ro). Shoukaku 4.3.0 single node from `LAVALINK_*` env, lifecycle logging, per-guild players, REST resolve. E2e user-verified in-stack 2026-06-07. | YouTube auth hooks unset until blocking observed (`known-constraints.md`). |
+| Health endpoint | done | `infrastructure/health-server.ts` (`49a77ac`): zero-dep `node:http` server, `GET /health` → 200 when discord+lavalink+db all up, 503 degraded. DB counts up when persistence disabled. For external monitors (Uptime Kuma). No Dockerfile `EXPOSE` (app-level, not image-advertised). | — |
 | Release tooling | done | `scripts/release.sh` via npm scripts: clean-tree check, bump, tag, push, optional gh release. | — |
 | Tests | deferred | No test suite; verification is `npm run build` + live checks. | `nice-to-have.md`. |
 
