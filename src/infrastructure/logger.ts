@@ -132,10 +132,6 @@ export class AppLogger {
     }
   }
 
-  getMetrics(): Metrics {
-    return { ...this.metrics };
-  }
-
   incrementTotalCommands(): void {
     this.metrics.total_commands++;
     this.logger.debug({ metric: 'total_commands', value: this.metrics.total_commands }, 'Command executed');
@@ -163,36 +159,6 @@ export class AppLogger {
 
   logMetrics(): void {
     this.logger.info(this.metrics, 'Current metrics');
-  }
-
-  logWithContext(
-    level: 'info' | 'warn' | 'error' | 'debug',
-    message: string,
-    module: string,
-    context: {
-      guildId?: string;
-      userId?: string;
-      commandName?: string;
-      metadata?: any;
-    }
-  ): void {
-    this.logToDatabase(
-      level,
-      message,
-      module,
-      context.metadata,
-      context.guildId,
-      context.userId,
-      context.commandName
-    );
-
-    // Also log to console
-    this.logger[level]({
-      ...context.metadata,
-      guild_id: context.guildId,
-      user_id: context.userId,
-      command_name: context.commandName
-    }, message);
   }
 
   async cleanup(): Promise<void> {

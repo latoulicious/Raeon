@@ -144,29 +144,6 @@ export class DatabaseLogger {
     }
   }
 
-  async cleanupOldLogs(daysToKeep: number = 30): Promise<void> {
-    let client: PoolClient | null = null;
-    
-    try {
-      client = await this.pool.connect();
-      
-      const query = `
-        DELETE FROM logs 
-        WHERE created_at < NOW() - INTERVAL '${daysToKeep} days'
-      `;
-      
-      const result = await client.query(query);
-      console.log(`Cleaned up ${result.rowCount} old log entries`);
-    } catch (error) {
-      console.error('Error cleaning up old logs:', error);
-      throw error;
-    } finally {
-      if (client) {
-        client.release();
-      }
-    }
-  }
-
   async close(): Promise<void> {
     await this.pool.end();
     this.isConnected = false;
