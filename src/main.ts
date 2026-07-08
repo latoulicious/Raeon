@@ -12,6 +12,7 @@ import { pingCommand } from './commands/ping.js';
 import { playCommand } from './commands/play.js';
 import { stopCommand } from './commands/stop.js';
 import { skipCommand } from './commands/skip.js';
+import { autoplayCommand } from './commands/autoplay.js';
 import { queueCommand } from './commands/queue.js';
 import { clearCommand } from './commands/clear.js';
 import { commandsCommand } from './commands/commands.js';
@@ -91,6 +92,7 @@ class Application {
     this.slashCommands.set(playCommand.data.name, playCommand);
     this.slashCommands.set(stopCommand.data.name, stopCommand);
     this.slashCommands.set(skipCommand.data.name, skipCommand);
+    this.slashCommands.set(autoplayCommand.data.name, autoplayCommand);
     this.slashCommands.set(queueCommand.data.name, queueCommand);
     this.slashCommands.set(clearCommand.data.name, clearCommand);
     this.slashCommands.set(commandsCommand.data.name, commandsCommand);

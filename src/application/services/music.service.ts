@@ -39,6 +39,10 @@ export class MusicService {
   private readonly snapshotTimers = new Map<string, NodeJS.Timeout>();
   /** Sessions loaded at boot, waiting for /play or /resume to revive them. */
   private readonly pendingSessions = new Map<string, PersistedSession>();
+  /** Guilds with autoplay on. ponytail: in-memory only, resets on restart; persist alongside the session if that ever matters. */
+  private readonly autoplayEnabled = new Set<string>();
+  /** Per-guild set of recently autoplayed track URIs, so a radio mix doesn't loop the same songs. */
+  private readonly recentAutoplay = new Map<string, Set<string>>();
 
   constructor(
     private readonly lavalink: LavalinkClient,
@@ -247,6 +251,7 @@ export class MusicService {
       (failedTrack) => this.notifyTrackFailure(guildId, failedTrack),
       () => this.scheduleSnapshot(guildId),
       () => this.timeoutService.updateActivity(guildId),
+      (endedTrack) => this.handleAutoplay(guildId, endedTrack),
     );
     this.players.set(guildId, player);
     logger.info({ guildId }, 'Created new guild player');
@@ -318,6 +323,8 @@ export class MusicService {
     this.lastTextChannelIds.delete(guildId);
     this.lastVoiceChannelIds.delete(guildId);
     this.lastErrorNotifyAt.delete(guildId);
+    this.autoplayEnabled.delete(guildId);
+    this.recentAutoplay.delete(guildId);
     const player = this.players.get(guildId);
     if (player) {
       try {
@@ -393,6 +400,120 @@ export class MusicService {
       }
     }
     return null;
+  }
+
+  /** Turn autoplay on/off for a guild. */
+  setAutoplay(guildId: string, enabled: boolean): void {
+    if (enabled) {
+      this.autoplayEnabled.add(guildId);
+    } else {
+      this.autoplayEnabled.delete(guildId);
+    }
+  }
+
+  isAutoplayEnabled(guildId: string): boolean {
+    return this.autoplayEnabled.has(guildId);
+  }
+
+  /**
+   * Queue-exhausted hook: when a track finishes with nothing queued and
+   * autoplay is on, resolve the finished track's YouTube radio mix and
+   * enqueue a fresh similar track. Fire-and-forget — failures leave the
+   * player idle and the normal idle-timeout takes over.
+   */
+  private handleAutoplay(guildId: string, endedTrack: Track): void {
+    if (!this.autoplayEnabled.has(guildId)) {
+      return;
+    }
+    const seed = this.buildRadioSeed(endedTrack.uri);
+    if (!seed) {
+      logger.debug({ guildId, uri: endedTrack.uri }, 'Autoplay: no YouTube radio seed for this track, staying idle');
+      return;
+    }
+    // Hold off the idle timeout while the async resolve is in flight.
+    this.timeoutService.updateActivity(guildId);
+    void this.autoplayNext(guildId, endedTrack, seed);
+  }
+
+  private async autoplayNext(guildId: string, endedTrack: Track, seed: string): Promise<void> {
+    const player = this.players.get(guildId);
+    // A user /play between end and now already refilled the queue — leave it be.
+    if (!player || player.getIsPlaying() || player.getQueue().length > 0) {
+      return;
+    }
+    try {
+      const result = await this.lavalink.resolve(seed);
+      if (result.kind !== 'playlist') {
+        return;
+      }
+      // Re-check after the await: the user may have queued something meanwhile.
+      if (player.getIsPlaying() || player.getQueue().length > 0) {
+        return;
+      }
+
+      const recent = this.getRecentAutoplay(guildId);
+      const isFresh = (t: Track): boolean => t.uri !== endedTrack.uri && !recent.has(t.uri);
+      // Prefer an unseen track; fall back to any non-seed track if the mix is exhausted.
+      const next = result.tracks.find(isFresh) ?? result.tracks.find(t => t.uri !== endedTrack.uri);
+      if (!next) {
+        return;
+      }
+
+      this.rememberAutoplay(guildId, endedTrack.uri);
+      this.rememberAutoplay(guildId, next.uri);
+      player.enqueue(next);
+      this.timeoutService.updateActivity(guildId);
+      logger.info({ guildId, title: next.title, uri: next.uri }, 'Autoplay enqueued similar track');
+      player.start().catch(error => this.handlePlaybackError(guildId, error));
+    } catch (error) {
+      logger.warn({ guildId, error }, 'Autoplay failed to enqueue next track');
+    }
+  }
+
+  private getRecentAutoplay(guildId: string): Set<string> {
+    let recent = this.recentAutoplay.get(guildId);
+    if (!recent) {
+      recent = new Set();
+      this.recentAutoplay.set(guildId, recent);
+    }
+    return recent;
+  }
+
+  private rememberAutoplay(guildId: string, uri: string): void {
+    const recent = this.getRecentAutoplay(guildId);
+    recent.add(uri);
+    // ponytail: crude cap — dump the whole set past 50 rather than track LRU.
+    // A YouTube mix is ~25 tracks, so this only ever forgets stale history.
+    if (recent.size > 50) {
+      recent.clear();
+    }
+  }
+
+  /**
+   * Build a YouTube radio-mix identifier (list=RD<id>) from a track URI so
+   * resolve() returns YouTube's "up next" recommendations for that video.
+   * Returns null for non-YouTube URIs (no recommendation source available).
+   * ponytail: mirrors the video-id extraction in commands/play.ts; a shared
+   * helper isn't worth a cross-layer import for ~8 lines.
+   */
+  private buildRadioSeed(uri: string): string | null {
+    let videoId: string | null = null;
+    try {
+      const u = new URL(uri);
+      const host = u.hostname.replace(/^www\./, '');
+      if (host === 'youtu.be') {
+        videoId = u.pathname.slice(1) || null;
+      } else if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+        if (u.pathname === '/watch') videoId = u.searchParams.get('v');
+        else if (u.pathname.startsWith('/shorts/')) videoId = u.pathname.split('/')[2] ?? null;
+      }
+    } catch {
+      return null;
+    }
+    if (!videoId) {
+      return null;
+    }
+    return `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}&start_radio=1`;
   }
 
   private handlePlaybackError(guildId: string, error: unknown): void {

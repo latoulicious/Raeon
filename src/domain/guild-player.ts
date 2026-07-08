@@ -61,6 +61,8 @@ export class GuildPlayer {
     private readonly onChange?: () => void,
     /** Fired when auto-advance begins the next queued track; resets the idle timer. */
     private readonly onAutoAdvance?: () => void,
+    /** Fired when a track finishes and the queue is empty; the handler may enqueue a similar track (autoplay). */
+    private readonly onQueueExhausted?: (endedTrack: Track) => void,
   ) {
     this.player.onTrackEnd((reason) => this.handleTrackEnd(reason));
     this.player.onTrackStuck(() => this.advanceAfterFailure());
@@ -205,6 +207,11 @@ export class GuildPlayer {
     if (this.queue.length > 0) {
       this.state = PlayerState.QUEUED;
       this.onAutoAdvance?.();
+    } else if (reason === 'finished' && endedTrack) {
+      // Natural end with nothing queued: let autoplay (if enabled) resolve a
+      // similar track and enqueue+start it. User stop/skip (reason 'stopped')
+      // is excluded so autoplay never resurrects a deliberately-ended session.
+      this.onQueueExhausted?.(endedTrack);
     }
 
     this.start().catch((error) => {
