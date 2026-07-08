@@ -362,14 +362,14 @@ export class EmbedService {
           '`/play <url|query>` - Play a track or playlist from YouTube\n' +
           '`/stop` - Stop playing and disconnect\n' +
           '`/skip` - Skip the current song\n' +
+          '`/autoplay [enabled]` - Toggle queuing a similar song when the queue ends\n' +
           '`/pause` - Pause the current song\n' +
           '`/resume` - Resume playback or restore the previous session\n' +
           '`/nowplaying` - Show currently playing song\n' +
           '`/queue` - Show the music queue\n' +
           '`/shuffle` - Shuffle the music queue\n' +
           '`/remove <position>` - Remove song from queue\n' +
-          '`/clear` - Clear the queue\n' +
-          '`/search <query>` - Search for songs',
+          '`/clear` - Clear the queue',
         inline: false
       },
       {
