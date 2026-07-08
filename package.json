@@ -1,6 +1,6 @@
 {
   "name": "raeon",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Production Discord music bot with clean architecture",
   "main": "dist/main.js",
   "type": "module",
