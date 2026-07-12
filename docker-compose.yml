@@ -1,17 +1,7 @@
-# Bot-only stack. Postgres and Lavalink+yt-cipher are extracted to shared
-# infra stacks (see /Atelier/Infrastructure/{postgres,lavalink}). The bot
-# reaches them over external docker networks:
-#   - shared-db    -> postgres:5432   (DATABASE_URL below)
-#   - lavalink-net -> lavalink:2333   (LAVALINK_HOST below)
-#
-# Both networks + both infra stacks must be up first:
-#   docker network create shared-db lavalink-net
-#   (cd /Atelier/Infrastructure/postgres && docker compose up -d)
-#   (cd /Atelier/Infrastructure/lavalink && docker compose up -d)
 services:
   raeon-bot:
     build: .
-    container_name: raeon-discord-bot
+    container_name: raeon-bot
     restart: unless-stopped
     environment:
       # In-stack values; these override host-dev settings from .env
@@ -24,8 +14,6 @@ services:
       - .env
     ports:
       # Host-local only; lets a host-run Uptime Kuma / dev reach the probe.
-      # Kuma on shared-db/lavalink-net can instead hit
-      # http://raeon-discord-bot:3000/health with no published port.
       - "127.0.0.1:3000:3000"
     networks:
       - shared-db
