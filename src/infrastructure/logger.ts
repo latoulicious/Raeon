@@ -161,6 +161,12 @@ export class AppLogger {
     this.logger.info(this.metrics, 'Current metrics');
   }
 
+  async pruneOldLogs(retentionDays: number): Promise<void> {
+    if (this.dbLogger) {
+      await this.dbLogger.pruneOldLogs(retentionDays);
+    }
+  }
+
   async cleanup(): Promise<void> {
     if (this.dbLogger) {
       await this.dbLogger.close();

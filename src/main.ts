@@ -47,6 +47,7 @@ class Application {
   private abortController: AbortController;
   private presenceInterval: NodeJS.Timeout | null = null;
   private metricsInterval: NodeJS.Timeout | null = null;
+  private retentionInterval: NodeJS.Timeout | null = null;
   private healthServer: Server | null = null;
 
   constructor(config: any) {
@@ -148,6 +149,7 @@ class Application {
 
     this.setupGracefulShutdown();
     this.setupMetricsLogging();
+    this.setupLogRetention();
 
     const healthPort = Number(process.env.HEALTH_PORT || 3000);
     this.healthServer = startHealthServer(healthPort, {
@@ -155,6 +157,17 @@ class Application {
       lavalink: this.lavalinkClient,
       queueStore: this.queueStore,
     });
+  }
+
+  private setupLogRetention(): void {
+    const retentionDays = Number(process.env.LOG_RETENTION_DAYS || 30);
+    const prune = () => {
+      appLogger.pruneOldLogs(retentionDays).catch((error) => {
+        logger.error({ error }, 'Log retention prune failed');
+      });
+    };
+    prune(); // once at boot; no-op if the DB isn't connected yet
+    this.retentionInterval = setInterval(prune, 24 * 60 * 60 * 1000);
   }
 
   private setupMetricsLogging(): void {
@@ -217,6 +230,10 @@ class Application {
         if (this.metricsInterval) {
           clearInterval(this.metricsInterval);
           logger.debug('Metrics interval cleared');
+        }
+        if (this.retentionInterval) {
+          clearInterval(this.retentionInterval);
+          logger.debug('Log retention interval cleared');
         }
         if (this.healthServer) {
           await new Promise<void>((resolve) => this.healthServer!.close(() => resolve()));
