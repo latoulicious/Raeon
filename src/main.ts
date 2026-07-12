@@ -21,8 +21,11 @@ import { pauseCommand } from './commands/pause.js';
 import { resumeCommand } from './commands/resume.js';
 import { shuffleCommand } from './commands/shuffle.js';
 import { removeCommand } from './commands/remove.js';
+import { moveCommand } from './commands/move.js';
+import { loopCommand } from './commands/loop.js';
 import { pruneCommand } from './commands/prune.js';
 import { aboutCommand } from './commands/about.js';
+import { docsCommand } from './commands/docs.js';
 import { usageCommand } from './commands/usage.js';
 import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
@@ -101,8 +104,11 @@ class Application {
     this.slashCommands.set(resumeCommand.data.name, resumeCommand);
     this.slashCommands.set(shuffleCommand.data.name, shuffleCommand);
     this.slashCommands.set(removeCommand.data.name, removeCommand);
+    this.slashCommands.set(moveCommand.data.name, moveCommand);
+    this.slashCommands.set(loopCommand.data.name, loopCommand);
     this.slashCommands.set(pruneCommand.data.name, pruneCommand);
     this.slashCommands.set(aboutCommand.data.name, aboutCommand);
+    this.slashCommands.set(docsCommand.data.name, docsCommand);
     this.slashCommands.set(usageCommand.data.name, usageCommand);
   }
 

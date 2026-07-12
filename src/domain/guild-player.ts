@@ -2,6 +2,8 @@ import type { Track } from './track.js';
 
 export type TrackEndReason = 'finished' | 'loadFailed' | 'stopped' | 'replaced' | 'cleanup';
 
+export type LoopMode = 'off' | 'track' | 'queue';
+
 /**
  * Minimal playback surface the domain needs from a Lavalink player.
  * Implemented by the Shoukaku adapter in infrastructure/lavalink.ts so
@@ -50,6 +52,8 @@ export class GuildPlayer {
   private currentTrack: Track | null = null;
   /** Set by stop() so the resulting `end` event does not auto-advance */
   private suppressAdvance = false;
+  /** off = normal advance; track = replay current; queue = cycle current to the back. */
+  private loopMode: LoopMode = 'off';
 
   constructor(
     private readonly guildId: string,
@@ -182,6 +186,36 @@ export class GuildPlayer {
     return removed;
   }
 
+  /** Reorder within the queue; positions are 1-indexed like remove(). */
+  move(from: number, to: number): Track | null {
+    if (!Number.isInteger(from) || !Number.isInteger(to)) {
+      return null;
+    }
+    const len = this.queue.length;
+    if (from < 1 || from > len || to < 1 || to > len) {
+      return null;
+    }
+    if (from === to) {
+      return this.queue[from - 1] ?? null;
+    }
+
+    const moved = this.queue.splice(from - 1, 1)[0] ?? null;
+    if (!moved) {
+      return null;
+    }
+    this.queue.splice(to - 1, 0, moved);
+    this.onChange?.();
+    return moved;
+  }
+
+  setLoop(mode: LoopMode): void {
+    this.loopMode = mode;
+  }
+
+  getLoop(): LoopMode {
+    return this.loopMode;
+  }
+
   private handleTrackEnd(reason: TrackEndReason): void {
     if (reason === 'replaced') {
       return;
@@ -199,6 +233,16 @@ export class GuildPlayer {
     if (this.suppressAdvance || reason === 'cleanup') {
       this.suppressAdvance = false;
       return;
+    }
+
+    // Loop re-enqueues the finished track before the advance decision below;
+    // only natural ends loop, so skip/stop/failure still escape the loop.
+    if (reason === 'finished' && endedTrack && this.loopMode !== 'off') {
+      if (this.loopMode === 'track') {
+        this.queue.unshift(endedTrack);
+      } else {
+        this.queue.push(endedTrack);
+      }
     }
 
     // Auto-advance: mark QUEUED before the async start() so the microtask

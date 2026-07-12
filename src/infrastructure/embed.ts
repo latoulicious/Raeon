@@ -369,6 +369,8 @@ export class EmbedService {
           '`/queue` - Show the music queue\n' +
           '`/shuffle` - Shuffle the music queue\n' +
           '`/remove <position>` - Remove song from queue\n' +
+          '`/move <from> <to>` - Move a song to another position in the queue\n' +
+          '`/loop <off|track|queue>` - Loop the current track or the whole queue\n' +
           '`/clear` - Clear the queue',
         inline: false
       },
@@ -376,6 +378,7 @@ export class EmbedService {
         name: 'Utility Commands',
         value:
           '`/about` - Show bot info and metadata\n' +
+          '`/docs` - Show a link to the documentation\n' +
           '`/usage` - Show bot resource usage\n' +
           '`/ping` - Check bot latency\n' +
           '`/commands` - Show this help message\n' +
