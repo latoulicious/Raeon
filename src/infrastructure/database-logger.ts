@@ -144,6 +144,38 @@ export class DatabaseLogger {
     }
   }
 
+  /**
+   * Delete logs older than retentionDays. Guarded and error-swallowing so a
+   * slow or down DB never blocks the caller — matches the fire-and-forget logging contract.
+   */
+  async pruneOldLogs(retentionDays: number): Promise<void> {
+    // Guard against a misconfigured LOG_RETENTION_DAYS: 0 or a negative value
+    // would flip the interval and DELETE the whole table.
+    if (!Number.isSafeInteger(retentionDays) || retentionDays <= 0) {
+      console.error('Invalid log retention period, skipping prune:', retentionDays);
+      return;
+    }
+    if (!this.isConnected) {
+      return;
+    }
+
+    let client: PoolClient | null = null;
+    try {
+      client = await this.pool.connect();
+      const result = await client.query(
+        `DELETE FROM logs WHERE timestamp < NOW() - make_interval(days => $1::int)`,
+        [retentionDays],
+      );
+      console.log(`Pruned ${result.rowCount ?? 0} log rows older than ${retentionDays} days`);
+    } catch (error) {
+      console.error('Error pruning old logs:', error);
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
     this.isConnected = false;

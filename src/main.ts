@@ -21,8 +21,11 @@ import { pauseCommand } from './commands/pause.js';
 import { resumeCommand } from './commands/resume.js';
 import { shuffleCommand } from './commands/shuffle.js';
 import { removeCommand } from './commands/remove.js';
+import { moveCommand } from './commands/move.js';
+import { loopCommand } from './commands/loop.js';
 import { pruneCommand } from './commands/prune.js';
 import { aboutCommand } from './commands/about.js';
+import { docsCommand } from './commands/docs.js';
 import { usageCommand } from './commands/usage.js';
 import { updatePresence } from './presence/index.js';
 import { appLogger } from './infrastructure/logger.js';
@@ -44,6 +47,7 @@ class Application {
   private abortController: AbortController;
   private presenceInterval: NodeJS.Timeout | null = null;
   private metricsInterval: NodeJS.Timeout | null = null;
+  private retentionInterval: NodeJS.Timeout | null = null;
   private healthServer: Server | null = null;
 
   constructor(config: any) {
@@ -101,8 +105,11 @@ class Application {
     this.slashCommands.set(resumeCommand.data.name, resumeCommand);
     this.slashCommands.set(shuffleCommand.data.name, shuffleCommand);
     this.slashCommands.set(removeCommand.data.name, removeCommand);
+    this.slashCommands.set(moveCommand.data.name, moveCommand);
+    this.slashCommands.set(loopCommand.data.name, loopCommand);
     this.slashCommands.set(pruneCommand.data.name, pruneCommand);
     this.slashCommands.set(aboutCommand.data.name, aboutCommand);
+    this.slashCommands.set(docsCommand.data.name, docsCommand);
     this.slashCommands.set(usageCommand.data.name, usageCommand);
   }
 
@@ -142,6 +149,7 @@ class Application {
 
     this.setupGracefulShutdown();
     this.setupMetricsLogging();
+    this.setupLogRetention();
 
     const healthPort = Number(process.env.HEALTH_PORT || 3000);
     this.healthServer = startHealthServer(healthPort, {
@@ -149,6 +157,17 @@ class Application {
       lavalink: this.lavalinkClient,
       queueStore: this.queueStore,
     });
+  }
+
+  private setupLogRetention(): void {
+    const retentionDays = Number(process.env.LOG_RETENTION_DAYS || 30);
+    const prune = () => {
+      appLogger.pruneOldLogs(retentionDays).catch((error) => {
+        logger.error({ error }, 'Log retention prune failed');
+      });
+    };
+    prune(); // once at boot; no-op if the DB isn't connected yet
+    this.retentionInterval = setInterval(prune, 24 * 60 * 60 * 1000);
   }
 
   private setupMetricsLogging(): void {
@@ -211,6 +230,10 @@ class Application {
         if (this.metricsInterval) {
           clearInterval(this.metricsInterval);
           logger.debug('Metrics interval cleared');
+        }
+        if (this.retentionInterval) {
+          clearInterval(this.retentionInterval);
+          logger.debug('Log retention interval cleared');
         }
         if (this.healthServer) {
           await new Promise<void>((resolve) => this.healthServer!.close(() => resolve()));

@@ -1,4 +1,5 @@
 import { GuildPlayer, GuildPlayerError } from '../../domain/guild-player.js';
+import type { LoopMode } from '../../domain/guild-player.js';
 import type { ResolveResult, Track } from '../../domain/track.js';
 import { LavalinkClient, LavalinkError } from '../../infrastructure/lavalink.js';
 import { appLogger } from '../../infrastructure/logger.js';
@@ -386,6 +387,27 @@ export class MusicService {
     this.timeoutService.updateActivity(guildId);
     const player = this.players.get(guildId);
     return player?.remove(position) ?? null;
+  }
+
+  move(guildId: string, from: number, to: number): Track | null {
+    this.timeoutService.updateActivity(guildId);
+    const player = this.players.get(guildId);
+    return player?.move(from, to) ?? null;
+  }
+
+  /** Set loop mode; false when no active player exists to loop. */
+  setLoop(guildId: string, mode: LoopMode): boolean {
+    this.timeoutService.updateActivity(guildId);
+    const player = this.players.get(guildId);
+    if (!player) {
+      return false;
+    }
+    player.setLoop(mode);
+    return true;
+  }
+
+  getLoop(guildId: string): LoopMode {
+    return this.players.get(guildId)?.getLoop() ?? 'off';
   }
 
   getCurrentTrack(guildId: string): Track | null {
