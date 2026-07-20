@@ -1,5 +1,6 @@
 services:
   raeon-bot:
+    image: ghcr.io/latoulicious/raeon:${TAG:-main}
     build: .
     container_name: raeon-bot
     restart: unless-stopped
@@ -27,7 +28,7 @@ services:
       start_period: 40s
 
 networks:
-  # Both pre-created on the VPS and owned by the infra stacks:
+  # Both pre-created and owned by the infra stacks:
   #   docker network create shared-db lavalink-net
   shared-db:
     external: true
