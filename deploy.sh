@@ -1,46 +1,46 @@
 #!/usr/bin/env bash
-# Manual deploy: bring the compose stack to the newest release tag (vX.Y.Z).
-# Run over SSH on the VM after cutting a release:
-#
-#   cd /opt/raeon && ./deploy.sh
-#
-# Idempotent: new tag -> checks it out and rebuilds; already on latest -> just
-# recreates the stack. Pins to the highest release tag, never branch main.
+# Pairs with .github/workflows/build.yml (GHCR image tagged by sha) and a
+# compose service carrying `image: ghcr.io/latoulicious/raeon:${TAG:-main}`.
 set -euo pipefail
-
 cd "$(dirname "$0")"
-REMOTE="origin"
 
-log() { echo "[deploy] $*"; }
+usage() {
+  cat <<'EOF'
+Usage: deploy.sh [sha]
 
-# Refresh remote tags (public repo over HTTPS, no auth needed).
-git fetch --tags --force --prune "$REMOTE" >/dev/null 2>&1
+No arg: pull main and deploy its HEAD. With a sha: deploy that commit
+(rollback). Images come from GHCR (TAG = deployed sha); nothing builds here.
+EOF
+}
 
-latest_tag="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
-if [ -z "$latest_tag" ]; then
-  log "no release tags found; nothing to deploy"
-  exit 0
-fi
+REF="${1:-}"
+[[ "$REF" == "-h" || "$REF" == "--help" ]] && { usage; exit 0; }
+[[ -z "$REF" || "$REF" =~ ^[0-9a-fA-F]{7,40}$ ]] || { echo "invalid sha: $REF" >&2; exit 2; }
 
-current="$(git describe --tags --exact-match 2>/dev/null || echo none)"
-if [ "$current" != "$latest_tag" ]; then
-  log "tag change: $current -> $latest_tag"
-  # .env is gitignored, so --force won't touch local secrets.
-  git checkout --force "$latest_tag"
-fi
-
-if [ ! -f .env ]; then
-  log "ERROR: .env missing — create it first (DISCORD_TOKEN, DB_PASSWORD, LAVALINK_PASSWORD)"
+if [[ ! -f .env ]]; then
+  echo "ERROR: .env missing — create it first (DISCORD_TOKEN, DB_PASSWORD, LAVALINK_PASSWORD)" >&2
   exit 1
 fi
 
+git fetch --prune origin
+if [[ -n "$REF" ]]; then
+  git checkout --detach "$REF"
+else
+  git checkout main
+  git pull --ff-only origin main
+fi
+
+TAG="$(git rev-parse HEAD)"
+export TAG
+
 # External networks owned by the shared infra stacks (postgres, lavalink).
-# Idempotent — the bot stack declares them external and won't start without.
 docker network create shared-db    >/dev/null 2>&1 || true
 docker network create lavalink-net >/dev/null 2>&1 || true
 
-log "building + starting $latest_tag"
-docker compose up -d --build
+# Explicit -f: never let a local-dev docker-compose.override.yml auto-load
+# on the VPS.
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d --wait --remove-orphans
 
 docker image prune -f >/dev/null 2>&1 || true
-log "deployed $latest_tag"
+echo "deployed $TAG"
