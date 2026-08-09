@@ -2,6 +2,7 @@ node_modules
 yarn.lock
 dist
 .env
+.env.local
 cookies.txt
 docs/.obsidian/workspace.json
 .claude/settings.local.json
